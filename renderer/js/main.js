@@ -2,8 +2,11 @@
   "use strict";
 
   function boot() {
-    window.Glyphs.containment.init();
-    window.Glyphs.cursorIdle.init();
+    // Guard each module independently: if one script fails to load, the
+    // other still initializes rather than the whole cage going dark.
+    const g = window.Glyphs || {};
+    if (g.containment) g.containment.init();
+    if (g.cursorIdle) g.cursorIdle.init();
   }
 
   if (document.readyState === "loading") {
