@@ -1,0 +1,28 @@
+.cursor {
+  display: inline-block;
+  width: var(--cursor-w);
+  height: var(--cursor-h);
+  background: var(--phosphor);
+  box-shadow:
+    0 0 6px var(--phosphor-glow),
+    0 0 14px var(--phosphor-glow);
+  animation: cursor-blink var(--cursor-blink-period) step-end infinite;
+}
+
+@keyframes cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+    opacity: 1;
+  }
+}
