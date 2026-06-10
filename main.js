@@ -6,6 +6,10 @@ const { installAppLevel, attachToWindow } = require('./containment');
 
 const isDev = process.argv.includes('--dev');
 const isSmoke = process.argv.includes('--smoke');
+// Phase 2: --audio-test loads the audio validation harness instead of the
+// Phase 1 shell. It does not touch the cage; plain typing already passes through.
+const isAudioTest = process.argv.includes('--audio-test');
+const page = isAudioTest ? 'test-audio.html' : 'index.html';
 
 // Catch unhandled exceptions: log and exit non-zero so CI notices.
 process.on('uncaughtException', (err) => {
@@ -22,7 +26,7 @@ installAppLevel({ isDev });
 app.on('window-all-closed', () => app.quit());
 
 app.whenReady().then(() => {
-  const win = createWindow({ isDev });
+  const win = createWindow({ isDev, page });
   attachToWindow(win, { isDev });
 
   if (isSmoke) {
