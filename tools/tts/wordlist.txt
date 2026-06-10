@@ -689,7 +689,7 @@ young feeling
 yucky feeling
 yummy feeling
 
-# ── numbers ──
+# ── numbers (enough to count to the trillions) ──
 zero number
 one number
 two number
@@ -703,8 +703,26 @@ nine number
 ten number
 eleven number
 twelve number
+thirteen number
+fourteen number
+fifteen number
+sixteen number
+seventeen number
+eighteen number
+nineteen number
 twenty number
+thirty number
+forty number
+fifty number
+sixty number
+seventy number
+eighty number
+ninety number
 hundred number
+thousand number
+million number
+billion number
+trillion number
 
 # ── whimsy & story words ──
 birthday magic
