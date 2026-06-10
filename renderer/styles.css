@@ -311,6 +311,141 @@ body.pointer-hidden * {
   animation: stub-ping 220ms ease-out;
 }
 
+/* ── Phase 4: the find world ────────────────────────────────────── */
+/* Letters fall through the sky toward a dim catch line; the target  */
+/* word waits near the bottom as ghosted slots. Same phosphor, same  */
+/* calm — the arcade beat, not an arcade cabinet.                    */
+
+.find {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: monospace;
+  color: #33ff33;
+}
+
+.find[hidden] {
+  display: none;
+}
+
+.find-sky {
+  position: absolute;
+  inset: 0;
+}
+
+/* Falling letters: large glyphs the child can read at a glance.    */
+.find-letter {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 64px;
+  line-height: 1;
+  color: #33ff33;
+  text-shadow: 0 0 10px rgba(51, 255, 51, 0.45);
+  will-change: top;
+}
+
+/* A caught letter is mid-flight to its slot (transition set in JS). */
+.find-letter.caught {
+  text-shadow: 0 0 14px rgba(51, 255, 51, 0.8);
+}
+
+/* A pressed/clicked distractor dissolves with a small fizzle.      */
+@keyframes find-fizzle {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+}
+
+.find-letter.fizzle {
+  animation: find-fizzle 220ms ease-out forwards;
+}
+
+/* Clicked too early (needed letter, still too high): a tiny wobble. */
+@keyframes find-wobble {
+  0%, 100% { margin-left: 0; }
+  25%      { margin-left: -4px; }
+  75%      { margin-left: 4px; }
+}
+
+.find-letter.wobble {
+  animation: find-wobble 180ms linear 2;
+}
+
+/* The catch line: dim and dashed, present but never bossy.         */
+.find-catchline {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 74%;
+  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+}
+
+/* Generic keypress ping: the line brightens for a beat (the        */
+/* machine noticed you — mashing absorbed, never punished).         */
+@keyframes find-line-ping {
+  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
+  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+}
+
+.find-catchline.ping {
+  animation: find-line-ping 240ms ease-out;
+}
+
+/* The target word: fixed slots, faintly ghosted but readable.      */
+.find-slots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 84%;
+  display: flex;
+  justify-content: center;
+  gap: 0.35em;
+  font-size: 72px;
+  line-height: 1;
+}
+
+.find-slot {
+  color: #0f4f0f;            /* ghost — clearly readable, clearly empty */
+  min-width: 1ch;
+  text-align: center;
+}
+
+.find-slot.locked {
+  color: #33ff33;
+  text-shadow: 0 0 12px rgba(51, 255, 51, 0.6);
+}
+
+/* A slot locking in (and the bonus-chime sparkle): a quick pop.    */
+@keyframes find-slot-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.find-slot.pop {
+  animation: find-slot-pop 260ms ease-out;
+}
+
+/* The right key with nothing catchable: its ghost slot stirs.      */
+@keyframes find-slot-hint {
+  0%   { color: #0f4f0f; }
+  40%  { color: #26cc26; text-shadow: 0 0 8px rgba(51, 255, 51, 0.4); }
+  100% { color: #0f4f0f; }
+}
+
+.find-slot.hint {
+  animation: find-slot-hint 340ms ease-out;
+}
+
+/* All slots filled: the whole word pulses and glows for a moment.  */
+@keyframes find-word-pulse {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 12px rgba(51, 255, 51, 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 22px rgba(51, 255, 51, 0.95); }
+}
+
+.find-slots.find-complete .find-slot {
+  animation: find-word-pulse 700ms ease-in-out 3;
+}
+
 /* ── flourish layer ─────────────────────────────────────────────── */
 
 .flourish-layer {
