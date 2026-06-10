@@ -9,6 +9,7 @@
    Clip path layout (relative to the renderer page):
      word clip        audio/<voice>/words/<word>.<ext>
      phonemic letter  audio/<voice>/letters-phonemic/<letter>.<ext>
+     letter name      audio/<voice>/letters-name/<letter>.<ext>
      hmm              audio/<voice>/hmm.<ext>
      deflate          audio/<voice>/deflate.<ext>
 */
@@ -75,9 +76,12 @@
      Non-primary voices only carry the bake-off subset. For any clip
      that is not in that subset, fall back to the primary voice.
 
-     kind: 'word' | 'letter' | 'hmm' | 'deflate'
+     kind: 'word' | 'letter' | 'lettername' | 'hmm' | 'deflate'
      key:  the word string, or the letter character, or '' for hmm/deflate. */
   function voiceForClip(kind, key) {
+    if (kind === 'lettername') {
+      return primary();   /* letter-name clips exist only in the primary voice */
+    }
     var cur = currentVoice();
     if (cur === primary()) {
       return cur;   /* primary always has everything */
@@ -107,6 +111,7 @@
     var e = ext();
     if (kind === 'word')   return 'audio/' + voice + '/words/' + key + '.' + e;
     if (kind === 'letter') return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
+    if (kind === 'lettername') return 'audio/' + voice + '/letters-name/' + key + '.' + e;
     if (kind === 'hmm')    return 'audio/' + voice + '/hmm.' + e;
     if (kind === 'deflate') return 'audio/' + voice + '/deflate.' + e;
     return null;
@@ -284,6 +289,38 @@
     return { type: 'soundout', letters: letters };
   }
 
+  /* ── playLetterName(letter) — single letter-name clip ────────── */
+  /*
+     Phase 4 find world: a successful catch speaks the letter's NAME
+     ("see", "ay", "tee" — letters-name/, not the phonemic set). Same
+     token/stop machinery as everything else, so rapid catches simply
+     supersede each other. A missing clip fails silently.
+  */
+  function playLetterName(letter) {
+    var l = (letter || '').toLowerCase();
+    if (!/^[a-z]$/.test(l)) return;
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('lettername', l), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
+  }
+
+  /* ── playHmm() — the thinking sound ──────────────────────────── */
+  /*
+     Phase 5 hide world (hider mode): the machine "hmm"s while it
+     theatrically searches. Same machinery as playLetterName.
+  */
+  function playHmm() {
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('hmm', ''), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
+  }
+
   /* ── playDeflate() — junk-input deflate clip ─────────────────── */
   /*
      Phase 3 hub: junk input gets a small "pfff". Goes through the same
@@ -314,6 +351,8 @@
       window.Glyphs.audio.isKnownWord    = isKnownWord;
       window.Glyphs.audio.play           = play;
       window.Glyphs.audio.playDeflate    = playDeflate;
+      window.Glyphs.audio.playLetterName = playLetterName;
+      window.Glyphs.audio.playHmm        = playHmm;
 
       /* Seed the current-voice index to point at the manifest primary. */
       var v = voices();

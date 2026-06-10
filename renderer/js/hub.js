@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  var KEYWORDS    = ['hide', 'draw', 'find'];
+  var KEYWORDS    = ['hide', 'draw', 'find', 'say'];
   var HISTORY_CAP = 500;
   /* Soft cap on the buffer so mashing can't push the line off-screen.
      Extra keys are absorbed silently — never punished, never leaked.  */
@@ -333,9 +333,17 @@
         if (key.length === 1) {
           e.preventDefault();
           if (buffer.length < BUFFER_MAX) {
-            buffer += /^[A-Za-z]$/.test(key) ? key.toLowerCase() : key;
+            var isLetter = /^[A-Za-z]$/.test(key);
+            buffer += isLetter ? key.toLowerCase() : key;
             altIndex = 0;
             renderInput();
+            /* Letter tones (DESIGN, Audio — Letter tones): each typed
+               letter plays its fixed tone, quietly — typing should feel
+               musical, never loud, and never compete with the clips.  */
+            var tones = window.Glyphs.tones;
+            if (isLetter && tones && tones.play) {
+              tones.play(key.toLowerCase(), { gain: 0.35 });
+            }
           }
           return;
         }

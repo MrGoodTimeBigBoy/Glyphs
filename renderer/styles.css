@@ -311,6 +311,141 @@ body.pointer-hidden * {
   animation: stub-ping 220ms ease-out;
 }
 
+/* ── Phase 4: the find world ────────────────────────────────────── */
+/* Letters fall through the sky toward a dim catch line; the target  */
+/* word waits near the bottom as ghosted slots. Same phosphor, same  */
+/* calm — the arcade beat, not an arcade cabinet.                    */
+
+.find {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: monospace;
+  color: #33ff33;
+}
+
+.find[hidden] {
+  display: none;
+}
+
+.find-sky {
+  position: absolute;
+  inset: 0;
+}
+
+/* Falling letters: large glyphs the child can read at a glance.    */
+.find-letter {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 64px;
+  line-height: 1;
+  color: #33ff33;
+  text-shadow: 0 0 10px rgba(51, 255, 51, 0.45);
+  will-change: top;
+}
+
+/* A caught letter is mid-flight to its slot (transition set in JS). */
+.find-letter.caught {
+  text-shadow: 0 0 14px rgba(51, 255, 51, 0.8);
+}
+
+/* A pressed/clicked distractor dissolves with a small fizzle.      */
+@keyframes find-fizzle {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+}
+
+.find-letter.fizzle {
+  animation: find-fizzle 220ms ease-out forwards;
+}
+
+/* Clicked too early (needed letter, still too high): a tiny wobble. */
+@keyframes find-wobble {
+  0%, 100% { margin-left: 0; }
+  25%      { margin-left: -4px; }
+  75%      { margin-left: 4px; }
+}
+
+.find-letter.wobble {
+  animation: find-wobble 180ms linear 2;
+}
+
+/* The catch line: dim and dashed, present but never bossy.         */
+.find-catchline {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 74%;
+  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+}
+
+/* Generic keypress ping: the line brightens for a beat (the        */
+/* machine noticed you — mashing absorbed, never punished).         */
+@keyframes find-line-ping {
+  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
+  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+}
+
+.find-catchline.ping {
+  animation: find-line-ping 240ms ease-out;
+}
+
+/* The target word: fixed slots, faintly ghosted but readable.      */
+.find-slots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 84%;
+  display: flex;
+  justify-content: center;
+  gap: 0.35em;
+  font-size: 72px;
+  line-height: 1;
+}
+
+.find-slot {
+  color: #0f4f0f;            /* ghost — clearly readable, clearly empty */
+  min-width: 1ch;
+  text-align: center;
+}
+
+.find-slot.locked {
+  color: #33ff33;
+  text-shadow: 0 0 12px rgba(51, 255, 51, 0.6);
+}
+
+/* A slot locking in (and the bonus-chime sparkle): a quick pop.    */
+@keyframes find-slot-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.find-slot.pop {
+  animation: find-slot-pop 260ms ease-out;
+}
+
+/* The right key with nothing catchable: its ghost slot stirs.      */
+@keyframes find-slot-hint {
+  0%   { color: #0f4f0f; }
+  40%  { color: #26cc26; text-shadow: 0 0 8px rgba(51, 255, 51, 0.4); }
+  100% { color: #0f4f0f; }
+}
+
+.find-slot.hint {
+  animation: find-slot-hint 340ms ease-out;
+}
+
+/* All slots filled: the whole word pulses and glows for a moment.  */
+@keyframes find-word-pulse {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 12px rgba(51, 255, 51, 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 22px rgba(51, 255, 51, 0.95); }
+}
+
+.find-slots.find-complete .find-slot {
+  animation: find-word-pulse 700ms ease-in-out 3;
+}
+
 /* ── flourish layer ─────────────────────────────────────────────── */
 
 .flourish-layer {
@@ -394,3 +529,375 @@ body.crt-on .crt-scanline {
 body.crt-on .crt-flicker {
   animation: crt-flicker 4.3s linear infinite;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   hide world (Phase 5) — owned by hide.js. Only the hide agent edits
+   between these markers.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Phase 5: the hide world ────────────────────────────────────── */
+/* A wall of one letter breathing slowly; one impostor hiding in it.  */
+/* Per-cell motion is inline transforms written by hide.js's one rAF  */
+/* loop; everything here is one-shot feedback as cheap CSS animation. */
+
+.hide {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: monospace;
+  color: #26cc26;
+}
+
+.hide[hidden] {
+  display: none;
+}
+
+/* The wall itself: a JS-sized grid filling the viewport edge to edge. */
+.hide-field {
+  position: absolute;
+  inset: 0;
+  display: grid;             /* template + font-size set from hide.js */
+  align-items: center;
+  justify-items: center;
+}
+
+.hide-cell {
+  line-height: 1;
+  color: #26cc26;
+  text-shadow: 0 0 6px rgba(51, 255, 51, 0.25);
+  will-change: transform;
+}
+
+/* Hider mode: unbuilt cells are dim placeholder dots.                */
+.hide-cell.ghost {
+  color: #0f4f0f;
+  text-shadow: none;
+}
+
+/* The next cell to fill blinks like a cursor — the non-verbal        */
+/* "your letters go here" (no menus, no instruction text).            */
+@keyframes hide-next-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.hide-cell.next {
+  color: #26cc26;
+  animation: hide-next-blink 1.06s step-end infinite;
+}
+
+/* Tiny keypress/click ping: flash bright, then animate home (no      */
+/* 100% frame — the browser eases back to the cell's own color).      */
+@keyframes hide-cell-ping {
+  0% { color: #33ff33; text-shadow: 0 0 10px rgba(51, 255, 51, 0.8); }
+}
+
+.hide-cell.ping {
+  animation: hide-cell-ping 240ms ease-out;
+}
+
+/* Speed-round catch: a quick pop. The CSS animation outranks the     */
+/* wave's inline transform for its duration, then hands back.         */
+@keyframes hide-cell-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.7); }
+  100% { transform: scale(1); }
+}
+
+.hide-cell.pop {
+  animation: hide-cell-pop 280ms ease-out;
+}
+
+/* A speed-round impostor morphing in (and back out): a phosphor      */
+/* re-light, like the tube refreshing that one cell.                  */
+@keyframes hide-swap-in {
+  0% { opacity: 0.25; }
+}
+
+.hide-cell.swap {
+  animation: hide-swap-in 160ms ease-out;
+}
+
+/* The found impostor (its growth/scatter transforms are inline).     */
+.hide-cell.bright {
+  color: #33ff33;
+  text-shadow: 0 0 18px rgba(51, 255, 51, 0.9);
+}
+
+/* The machine's eye (hider mode): a phosphor ring with a pupil. It   */
+/* glides between cells via the left/top transition (EYE_MOVE_MS in   */
+/* hide.js matches the 560ms here).                                   */
+.hide-eye {
+  position: absolute;
+  width: 1.7em;
+  height: 1.7em;
+  margin: -0.85em 0 0 -0.85em;   /* left/top receive the cell center */
+  border: 2px solid #33ff33;
+  border-radius: 50%;
+  box-shadow: 0 0 16px rgba(51, 255, 51, 0.55),
+              inset 0 0 10px rgba(51, 255, 51, 0.3);
+  transition: left 560ms ease-in-out, top 560ms ease-in-out;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.hide-eye[hidden] {
+  display: none;
+}
+
+.hide-eye::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.5em;
+  height: 0.5em;
+  margin: -0.25em 0 0 -0.25em;
+  border-radius: 50%;
+  background: #33ff33;
+  box-shadow: 0 0 10px #33ff33;
+}
+
+/* The eye blinking as it hovers a suspect (and at the reveal).       */
+@keyframes hide-eye-blink {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.12); }
+}
+
+.hide-eye.blink {
+  animation: hide-eye-blink 260ms ease-in-out;
+}
+
+/* HIDE-STYLES-END */
+
+/* ════════════════════════════════════════════════════════════════════
+   draw world (Phase 5) — owned by draw.js. Only the draw agent edits
+   between these markers.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The draw world: a full-screen canvas, the turtle riding above it, */
+/* the color indicator bottom-left, the palette overlay on top.      */
+
+.draw {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: monospace;
+  color: #33ff33;
+}
+
+.draw[hidden] {
+  display: none;
+}
+
+/* The trail canvas fills the world; its bitmap is dpr-sized in JS.  */
+.draw-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The turtle: bright phosphor with a strong glow so it always       */
+/* outshines the (softer, lower-alpha) trail. JS owns left/top and   */
+/* the rotate/scale transform; left/top glide so steps feel alive.   */
+.draw-turtle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+  font-size: 20px;
+  line-height: 1;
+  white-space: pre;
+  color: #33ff33;
+  text-shadow: 0 0 10px rgba(51, 255, 51, 0.9);
+  transition: left 70ms linear, top 70ms linear, transform 90ms ease-out;
+  will-change: left, top, transform;
+}
+
+/* During a mouse drag the turtle snaps to the pointer (no glide).   */
+.draw-turtle.no-glide {
+  transition: none;
+}
+
+.draw-turtle-glyph {
+  display: inline-block;
+}
+
+/* A quick pop on every action — the turtle acknowledges the key.    */
+@keyframes draw-turtle-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+.draw-turtle-glyph.pop {
+  animation: draw-turtle-pop 160ms ease-out;
+}
+
+/* Hitting an edge: a rubbery squish to go with the bounce-back.     */
+@keyframes draw-turtle-bump {
+  0%, 100% { transform: scale(1, 1); }
+  50%      { transform: scale(1.25, 0.75); }
+}
+
+.draw-turtle-glyph.bump {
+  animation: draw-turtle-bump 220ms ease-out;
+}
+
+/* The color indicator: a small square in the bottom-left corner.    */
+/* JS sets its background + glow to the current trail color.         */
+.draw-swatch {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  width: 30px;
+  height: 30px;
+  z-index: 4;
+  border: 1px solid rgba(51, 255, 51, 0.4);
+  border-radius: 3px;
+}
+
+/* Rainbow mode: the indicator becomes a slowly-cycling gradient.    */
+@keyframes draw-rainbow-spin {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+.draw-swatch.rainbow {
+  background: linear-gradient(135deg,
+    #ff4444, #ff9933, #ffee33, #33ff33, #4488ff, #cc66ff);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
+  animation: draw-rainbow-spin 2.4s linear infinite;
+}
+
+/* The palette overlay: big colored squares with their letters.      */
+.draw-palette {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  z-index: 6;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid #1a8f1a;
+  box-shadow: 0 0 18px rgba(51, 255, 51, 0.18);
+}
+
+.draw-palette[hidden] {
+  display: none;
+}
+
+.draw-pal-swatch {
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-size: 32px;
+  color: rgba(0, 0, 0, 0.75);   /* the letter, dark on the color */
+  border-radius: 4px;
+}
+
+/* DRAW-STYLES-END */
+
+/* ════════════════════════════════════════════════════════════════════
+   say world (Phase 6) — owned by say.js. Only the say agent edits
+   between these markers.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The say world: Simon Says for spelling. One word, large glowing      */
+/* letters with generous spacing, a dim baseline beneath it. All the    */
+/* motion here is one-shot CSS — say.js only toggles classes.           */
+
+.say {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  color: #33ff33;
+}
+
+/* display:flex would defeat the hidden attribute — be explicit. */
+.say[hidden] {
+  display: none;
+}
+
+/* The word: large letters, generous spacing, centered.                 */
+.say-word {
+  display: flex;
+  justify-content: center;
+  gap: 0.55em;
+  font-size: clamp(56px, 11vw, 120px);
+  line-height: 1;
+}
+
+/* A letter tile. The transition asymmetry is the design: lighting up   */
+/* is a fast pop (.lit overrides with its own quick transition) while   */
+/* dimming inherits this slow base transition — so the wrong-key reset  */
+/* eases the lit letters back gently, never harshly.                    */
+.say-letter {
+  color: #0f4f0f;            /* ghost — readable, clearly waiting */
+  min-width: 1ch;
+  text-align: center;
+  transition: color 650ms ease-out, text-shadow 650ms ease-out;
+}
+
+.say-letter.lit {
+  color: #33ff33;
+  text-shadow: 0 0 14px rgba(51, 255, 51, 0.6);
+  transition: color 70ms ease-out, text-shadow 70ms ease-out;
+}
+
+/* A clicked tile (or a show-phase key): a glow-pulse, like a touch —   */
+/* bright at 0%, then the browser eases back to the tile's own state.   */
+@keyframes say-letter-ping {
+  0% { color: #26cc26; text-shadow: 0 0 10px rgba(51, 255, 51, 0.55); }
+}
+
+.say-letter.ping {
+  animation: say-letter-ping 260ms ease-out;
+}
+
+/* Completion: the whole word glows brightly and pulses for a moment.   */
+.say-letter.bright {
+  color: #33ff33;
+  text-shadow: 0 0 18px rgba(51, 255, 51, 0.9);
+  transition: color 70ms ease-out, text-shadow 70ms ease-out;
+}
+
+@keyframes say-word-pulse {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 14px rgba(51, 255, 51, 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 24px rgba(51, 255, 51, 0.95); }
+}
+
+.say-word.say-complete .say-letter {
+  animation: say-word-pulse 700ms ease-in-out 3;
+}
+
+/* The baseline under the word: dim and dashed, present but never       */
+/* bossy — and the canvas for the generic keypress ping.                */
+.say-line {
+  width: 42%;
+  margin-top: 1.4em;
+  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+}
+
+@keyframes say-line-ping {
+  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
+  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+}
+
+.say-line.ping {
+  animation: say-line-ping 240ms ease-out;
+}
+
+/* SAY-STYLES-END */

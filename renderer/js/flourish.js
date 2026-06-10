@@ -199,15 +199,23 @@
     _active = { def: def, start: performance.now(), anchorX: 0, anchorY: 0 };
 
     if (def.anchor) {
-      /* "Beside the input line": just right of the blinking cursor. */
+      /* "Beside the input line": just right of the blinking cursor.
+         When the hub is hidden (e.g. a word completes inside find),
+         the cursor's rect collapses to zero — fall back to a spot
+         just above where the find slots sit.                        */
+      var anchored = false;
       var cursor = document.getElementById('hub-cursor');
       if (cursor) {
         var r = cursor.getBoundingClientRect();
-        _active.anchorX = r.right + 48;
-        _active.anchorY = r.top + r.height / 2;
-      } else {
+        if (r.width > 0 || r.height > 0) {
+          _active.anchorX = r.right + 48;
+          _active.anchorY = r.top + r.height / 2;
+          anchored = true;
+        }
+      }
+      if (!anchored) {
         _active.anchorX = window.innerWidth * 0.5;
-        _active.anchorY = window.innerHeight * 0.88;
+        _active.anchorY = window.innerHeight * 0.76;
       }
     }
 

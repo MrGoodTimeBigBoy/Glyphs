@@ -19,27 +19,43 @@
     <div class="world-stub" id="world-stub" hidden>
       <div class="world-stub-line" id="world-stub-line"></div>
     </div>
+    <div class="find" id="find" hidden>
+      <div class="find-sky" id="find-sky"></div>
+      <div class="find-catchline" id="find-catchline"></div>
+      <div class="find-slots" id="find-slots"></div>
+    </div>
+    <div class="hide" id="hide" hidden></div>
+    <div class="draw" id="draw" hidden></div>
+    <div class="say" id="say" hidden></div>
     <div class="flourish-layer" id="flourish-layer" aria-hidden="true"></div>
   </div>
 
   <!--
-    Script load order per PHASE3-PLAN.md Part B:
-      namespace → containment → pointer → audio/manifest → audio →
-      state → crt → flourish → persist → hub → boot
+    Script load order per PHASE3-PLAN.md Part B (+ worlds, Phases 4–6):
+      namespace → containment → pointer → audio/manifest → audio → tones →
+      state → crt → flourish → persist → hub → find → hide → draw → say →
+      boot
 
     audio/manifest.js is GENERATED — the hub works with whatever word set
     it lists (audio.js falls back to safe defaults if it is absent).
+    tones.js is infrastructure like audio.js: the letter-tone synth the
+    hub and the worlds all share.
   -->
   <script src="js/namespace.js"></script>
   <script src="js/containment.js"></script>
   <script src="js/pointer.js"></script>
   <script src="audio/manifest.js"></script>
   <script src="js/audio.js"></script>
+  <script src="js/tones.js"></script>
   <script src="js/state.js"></script>
   <script src="js/crt.js"></script>
   <script src="js/flourish.js"></script>
   <script src="js/persist.js"></script>
   <script src="js/hub.js"></script>
+  <script src="js/find.js"></script>
+  <script src="js/hide.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/say.js"></script>
   <script src="js/boot.js"></script>
 </body>
 </html>
