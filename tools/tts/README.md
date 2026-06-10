@@ -1,10 +1,25 @@
 # Glyphs — TTS Audio Pipeline
 
+> **STATUS (2026-06-10): generation is blocked on a provider/voice decision.**
+> The plan-of-record route — Google Gemini Flash TTS **through OpenRouter** —
+> turned out not to exist: OpenRouter routes **no Gemini TTS model at all**
+> (verified against `GET /api/v1/models`; every `google/gemini-*` model there
+> is text/image-only, and the router rejects audio modalities for them).
+> Two working routes were verified instead; Ian picks one:
+>
+> | Route | Status | Voices | Command |
+> |-------|--------|--------|---------|
+> | **A. Gemini API direct** (`generativelanguage.googleapis.com`) | Reachable from the container; **needs `GEMINI_API_KEY`** (not yet set) | **Sulafat / Aoede / Callirrhoe** — the original bake-off, preserved exactly | `--api gemini` |
+> | **B. OpenRouter → `openai/gpt-audio`** (streaming) | **Verified working end-to-end** with the existing `OPENROUTER_API_KEY` | OpenAI voices — **cedar / marin / coral** bake-off (configurable) | default (`--api openrouter`) |
+>
+> The probe for route B produced a clean 24 kHz mono WAV ("cat", voice cedar).
+> Route A's request/response contract is implemented per Google's documented
+> shape but needs one `--probe` with a real key to confirm.
+
 ## Approach
 
-Glyphs uses **pre-rendered TTS clips** generated offline via the
-[OpenRouter](https://openrouter.ai/) API (Google Gemini Flash TTS model).
-All audio is bundled with the app as plain WAV files under `renderer/audio/`.
+Glyphs uses **pre-rendered TTS clips** generated offline. All audio is bundled
+with the app as plain WAV files under `renderer/audio/`.
 
 ### Why no browser TTS fallback?
 
@@ -22,15 +37,36 @@ no robot TTS voice anywhere in the experience.
 
 ---
 
-## Model and voices
+## Backends, models, and voices
+
+The generator (`generate_clips.py`) supports two backends via `--api`:
+
+### `--api openrouter` (default)
 
 | Role | Value |
 |------|-------|
 | **API** | OpenRouter — `POST https://openrouter.ai/api/v1/chat/completions` |
-| **Model** | `google/gemini-3.1-flash-tts-preview` (confirm against `/api/v1/models`) |
+| **Key** | `OPENROUTER_API_KEY` |
+| **Model** | `openai/gpt-audio` (override: `--model` / `OPENROUTER_TTS_MODEL`; `openai/gpt-audio-mini` is the cheaper sibling) |
+| **Transport** | **`stream: true` is required** — OpenRouter rejects non-streaming audio requests. Audio arrives as base64 **PCM16** chunks in `choices[0].delta.audio.data`; the script concatenates and wraps them into WAV. |
+| **Primary voice** | **cedar** — full word set + all letters (phonemic and name) + hmm |
+| **Bake-off voices** | **marin**, **coral** — subset only |
+
+### `--api gemini` (Gemini API direct — preserves the original voice plan)
+
+| Role | Value |
+|------|-------|
+| **API** | `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
+| **Key** | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) |
+| **Model** | `gemini-2.5-flash-preview-tts` — best guess; confirm with `--api gemini --list-models` and override with `--model` / `GEMINI_TTS_MODEL` |
+| **Transport** | Non-streaming `generateContent` with `responseModalities: ["AUDIO"]` and a `prebuiltVoiceConfig` voice. Audio returns as base64 L16 PCM in `candidates[0].content.parts[*].inlineData`; the sample rate is parsed from the `mimeType`. |
 | **Primary voice** | **Sulafat** — full word set + all letters (phonemic and name) + hmm |
-| **Bake-off voices** | **Aoede**, **Callirrhoe** — subset only (see below) |
-| **Output format** | WAV / PCM 24 kHz mono, 16-bit signed little-endian |
+| **Bake-off voices** | **Aoede**, **Callirrhoe** — subset only |
+
+Both backends emit **WAV / PCM 24 kHz mono, 16-bit signed little-endian** and
+share all prompts, spellings, the output layout, and the manifest format. Voice
+names live in one place (`API_CONFIGS` in `generate_clips.py`) — adjust there
+if an API rejects a voice id.
 
 ### Style prompt
 
@@ -45,8 +81,7 @@ module-level constants in `generate_clips.py` and are easy to adjust.
 
 ### Bake-off subset
 
-The bake-off voices (Aoede, Callirrhoe) receive a reduced clip set for
-evaluation purposes:
+The two bake-off voices receive a reduced clip set for evaluation purposes:
 
 - Words: `cat sun apple the run`
 - Phonemic letters: `c a t`
@@ -60,10 +95,13 @@ voice using `--voices <chosen> --force`.
 ## Prerequisites
 
 1. **Python 3** — standard library only, no `pip install` required.
-2. **`OPENROUTER_API_KEY`** environment variable — an OpenRouter API key
-   (get one at https://openrouter.ai/settings/keys).
-3. **Network access to `openrouter.ai`** at generation time (clips are
-   generated once and committed; the app itself is fully offline).
+2. **An API key** in the environment:
+   - route B (default): `OPENROUTER_API_KEY` (https://openrouter.ai/settings/keys)
+   - route A: `GEMINI_API_KEY` (https://aistudio.google.com/apikey)
+3. **Network access** to `openrouter.ai` or `generativelanguage.googleapis.com`
+   at generation time (clips are generated once and committed; the app itself
+   is fully offline). Both hosts are reachable from the current container
+   environment.
 
 ---
 
@@ -72,57 +110,67 @@ voice using `--voices <chosen> --force`.
 ### Step 1 — probe (always run this first on a new machine)
 
 ```sh
-export OPENROUTER_API_KEY=sk-or-v1-...
+# Route B (OpenRouter / gpt-audio — works with the key already in the env):
 python3 tools/tts/generate_clips.py --probe
+
+# Route A (Gemini direct — once GEMINI_API_KEY is set):
+python3 tools/tts/generate_clips.py --api gemini --probe
 ```
 
-This generates exactly **one clip** (the word "cat", primary voice), prints
-the API response keys and the detected audio format, and writes the clip to
-`renderer/audio/sulafat/words/cat.wav`. Inspect the output to confirm:
+This generates exactly **one clip** (the word "cat", the backend's primary
+voice), prints the API response structure and the detected audio format, and
+writes the clip to `renderer/audio/<primary>/words/cat.wav`. Inspect the
+output to confirm:
 
 - The model ID is accepted (no "model not found" error).
 - Audio data is present in the response (the probe prints where it was found).
 - The written WAV file plays correctly.
 
 If the model ID or response shape differs from expectation, the probe output
-tells you exactly which JSON keys were seen. Update `DEFAULT_MODEL` or
-`extract_audio_bytes()` accordingly (one obvious place in the script for each).
+tells you exactly which JSON keys were seen. Update `API_CONFIGS`,
+`collect_openrouter_stream()`, or `extract_audio_gemini()` accordingly (one
+obvious place in the script for each).
+
+To see what models a backend can actually serve:
+
+```sh
+python3 tools/tts/generate_clips.py --list-models
+python3 tools/tts/generate_clips.py --api gemini --list-models
+```
 
 ### Step 2 — full run
 
 ```sh
-python3 tools/tts/generate_clips.py
+python3 tools/tts/generate_clips.py              # route B
+python3 tools/tts/generate_clips.py --api gemini # route A
 ```
 
-Or via npm:
+Or via npm (route B defaults):
 
 ```sh
 npm run gen-clips
 ```
 
-This generates all clips for all voices (primary Sulafat + bake-off Aoede and
-Callirrhoe) and writes `renderer/audio/manifest.js`.
+This generates all clips for all of the backend's voices (primary full set +
+two bake-off subsets) and writes `renderer/audio/manifest.js`.
 
 ### Other useful invocations
 
 ```sh
-# Full run with progress output, skipping files that already exist:
-python3 tools/tts/generate_clips.py
-
 # Re-generate everything for one voice (overwrite existing):
-python3 tools/tts/generate_clips.py --voices sulafat --force
+python3 tools/tts/generate_clips.py --api gemini --voices sulafat --force
 
 # Primary voice only (skip bake-off voices):
 python3 tools/tts/generate_clips.py --primary-only
 
-# Use a specific model ID (e.g. after confirming from /api/v1/models):
-python3 tools/tts/generate_clips.py --model google/gemini-flash-tts-1
+# Use a specific model ID (e.g. after confirming via --list-models):
+python3 tools/tts/generate_clips.py --model openai/gpt-audio-mini
 
 # Generate from a custom word list:
 python3 tools/tts/generate_clips.py --words path/to/mywords.txt
 
-# Write clips to a different directory:
-python3 tools/tts/generate_clips.py --out /tmp/audio-test
+# Write clips to a different directory (e.g. a throwaway probe):
+python3 tools/tts/generate_clips.py --probe --out /tmp/audio-test
 ```
 
 ---
@@ -148,15 +196,15 @@ To switch to a different voice and regenerate everything:
 
 ```sh
 # 1. Run once without --force to see what's already there:
-python3 tools/tts/generate_clips.py --voices aoede
+python3 tools/tts/generate_clips.py --api gemini --voices aoede
 
 # 2. Re-render everything for that voice, overwriting existing clips:
-python3 tools/tts/generate_clips.py --voices aoede --force
+python3 tools/tts/generate_clips.py --api gemini --voices aoede --force
 ```
 
-To update the primary voice: change `PRIMARY_VOICE` in `generate_clips.py`
-and add the new voice to the `VOICES` dict with the correct API casing, then
-run `--force`.
+To update a backend's primary voice: change its `primary` entry in
+`API_CONFIGS` in `generate_clips.py` (and make sure the voice is in its
+`voices` dict with the correct API casing), then run `--force`.
 
 ---
 
@@ -165,7 +213,7 @@ run `--force`.
 ```
 renderer/audio/
   manifest.js                     # generated — do not edit by hand
-  sulafat/
+  <primary>/                      # sulafat (route A) or cedar (route B)
     words/
       the.wav
       and.wav
@@ -175,19 +223,24 @@ renderer/audio/
     letters-name/
       a.wav  b.wav  … z.wav       # letter names ("ay", "bee", …)
     hmm.wav
-  aoede/
+  <bakeoff-1>/                    # aoede / marin
     words/  cat.wav  sun.wav  apple.wav  the.wav  run.wav
     letters-phonemic/  c.wav  a.wav  t.wav
     hmm.wav
-  callirrhoe/
-    … (same bake-off subset as aoede)
+  <bakeoff-2>/                    # callirrhoe / coral
+    … (same bake-off subset)
 ```
+
+The renderer reads voice names from `manifest.js`, so either route's
+directory names work unchanged in the test harness (Tab cycles whatever
+voices the manifest lists).
 
 ---
 
 ## WAV / PCM format details
 
-- **Sample rate:** 24 000 Hz (Gemini TTS default)
+- **Sample rate:** 24 000 Hz (both backends' default; the Gemini path parses
+  the actual rate from the response `mimeType`)
 - **Encoding:** signed 16-bit little-endian PCM (L16)
 - **Channels:** mono (1)
 - **Container:** RIFF WAV (stdlib `wave` module)
@@ -203,8 +256,10 @@ extension used.
 
 | Problem | Action |
 |---------|--------|
-| `OPENROUTER_API_KEY not set` | Export the env var before running. |
-| HTTP 404 / model not found | Check model ID via `GET https://openrouter.ai/api/v1/models`; update `DEFAULT_MODEL` in the script. |
-| `extract_audio_bytes` RuntimeError | Run `--probe` to see which JSON keys the API returns; update `extract_audio_bytes()` in the script. |
-| Clips sound robotic / wrong voice | Adjust voice casing in the `VOICES` dict; re-run with `--force`. |
+| `no API key set for --api …` | Export the env var named in the error before running. |
+| HTTP 404 / model not found | Run `--list-models` for the backend; update the model via `--model` or `API_CONFIGS`. |
+| "Audio output requires stream: true" (OpenRouter) | You are on an old script version — the streaming backend handles this; update. |
+| "No endpoints found that support the requested output modalities" (OpenRouter) | The model can't produce audio on OpenRouter. `--list-models` shows which can (as of 2026-06: only `openai/gpt-audio[-mini]` for speech). |
+| `collect_openrouter_stream` / `extract_audio_gemini` RuntimeError | Run `--probe` to see which JSON keys the API returns; update the named function. |
+| Clips sound robotic / wrong voice | Adjust voice ids/casing in `API_CONFIGS`; re-run with `--force`. |
 | Rate-limit (HTTP 429) | The script retries automatically with exponential backoff (1s, 2s, 4s). If limits persist, increase `INTER_CALL_SLEEP` at the top of the script. |
