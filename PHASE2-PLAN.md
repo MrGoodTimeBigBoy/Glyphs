@@ -111,9 +111,11 @@ is a separate page so headless `xvfb-run -a npm run dev -- --smoke --no-sandbox`
 
 ## Renderer contract
 
-- `manifest.js` sets `window.Glyphs.audio = { voices: [...], primary: 'sulafat', ext: 'wav',
-  words: [ ...known words... ] }`. It runs after `namespace.js`. (It does not need
-  `register()` — it is plain data the engine reads.)
+- `manifest.js` sets `window.Glyphs.audio.manifest = { primary: 'sulafat', voices: [...],
+  ext: 'wav', words: [ ...known words... ], bakeoffWords: [...] }` (it first ensures
+  `window.Glyphs.audio` exists, without clobbering it). It runs after `namespace.js`. (It does
+  not need `register()` — it is plain data the engine reads.) `audio.js` reads this nested
+  `.manifest` object defensively and falls back to safe defaults when it is absent.
 - `audio.js` registers via `window.Glyphs.register('audio', { init })` and exposes a small play
   API on the namespace (e.g. `window.Glyphs.audio.play(word)` / voice setters) for the harness.
 - `audio-test.js` registers via `window.Glyphs.register('audioTest', { init })`.

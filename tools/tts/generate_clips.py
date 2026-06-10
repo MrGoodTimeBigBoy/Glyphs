@@ -23,8 +23,6 @@ import base64
 import json
 import os
 import pathlib
-import re
-import struct
 import sys
 import time
 import urllib.error
@@ -469,35 +467,6 @@ def should_skip(base_path: pathlib.Path, force: bool) -> tuple[bool, pathlib.Pat
         if p.exists() and p.stat().st_size > 0:
             return True, p
     return False, None
-
-def generate_clip(text: str, dest_base: pathlib.Path, voice_dirname: str,
-                  model: str, api_key: str,
-                  force: bool = False) -> tuple[str | None, int]:
-    """Generate one clip and write it to disk.
-
-    Returns:
-        (ext, bytes_written) on success, or (None, 0) if skipped.
-    """
-    skip, existing = should_skip(dest_base, force)
-    if skip:
-        ext = existing.suffix.lstrip(".")
-        print(f"  [skip]  {dest_base.parent.name}/{dest_base.name}.{ext}")
-        return ext, 0
-
-    voice_api = VOICES.get(voice_dirname, voice_dirname.capitalize())
-    try:
-        audio_bytes, ext = call_tts_api(text, voice_api, model, api_key)
-    except RuntimeError as exc:
-        print(f"  [ERROR] {dest_base}: {exc}", file=sys.stderr)
-        return None, 0
-
-    dest = dest_base.with_suffix(f".{ext}")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(audio_bytes)
-    n = len(audio_bytes)
-    print(f"  [ok]    {dest.relative_to(dest_base.parents[3])}  ({n} bytes)")
-    time.sleep(INTER_CALL_SLEEP)
-    return ext, n
 
 # ---------------------------------------------------------------------------
 # Build clip list for a voice
