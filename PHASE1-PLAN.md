@@ -80,7 +80,7 @@ Renderer registers **no** keyboard handlers in Phase 1; main registers **no** co
 Evaluated in order for every input event on the window's webContents. `primary` = `input.meta` on macOS, `input.control` elsewhere. Compare `input.key` lowercased (layout-aware: Cmd+Q must follow the layout's Q, so `key`, not `code`).
 
 1. **Quit:** `primary && key === 'q' && !shift && !alt` → `event.preventDefault()`, and on a non-autorepeat `keyDown`, `app.quit()`. We must own quit ourselves: a null application menu removes macOS's built-in Cmd+Q binding.
-2. **Dev hatches (dev mode only, pass through):** Cmd/Ctrl+R reload; Cmd+Opt+I (mac) / Ctrl+Shift+I / F12 devtools.
+2. **Dev hatches (dev mode only):** Cmd/Ctrl+R reload; Cmd+Opt+I (mac) / Ctrl+Shift+I / F12 devtools. Handled *programmatically* (`reload()` / `toggleDevTools()` + preventDefault): the null application menu removed every native accelerator, so passing the chord through would do nothing.
 3. **Deny-by-default for chords:** anything remaining with `meta` or `control` held → `preventDefault()`. Enumerating bad shortcuts (Cmd+W, Cmd+R, Cmd+Shift+I, Cmd+M, Cmd+H, Cmd+F, Cmd+P, zoom…) is the bug-prone shape; deny-all-chords with one allowlisted exit swallows the ones we didn't think of.
 4. **Function keys:** F1–F12 regardless of modifiers → `preventDefault()` (F11 fullscreen toggle, F12 devtools, Alt+F4 lands here as key=F4).
 5. **Everything else passes:** plain letters, Shift+letters, arrows, Escape, Enter. Phase 1 ignores them in the renderer, but mash-absorption is a design principle and Phase 3 needs typing.
@@ -109,7 +109,7 @@ Glyphs.register('<name>', {
 | | `npm start` (prod) | `npm run dev` |
 |---|---|---|
 | Window | fullscreen + kiosk, fixed | windowed 1280×800, resizable |
-| DevTools | disabled at `webPreferences` level AND chords swallowed | enabled; devtools/reload chords pass |
+| DevTools | disabled at `webPreferences` level AND chords swallowed | enabled; devtools/reload chords handled by the interceptor |
 | Shortcut interception | full | full minus dev hatches |
 | Renderer containment (right-click, pointer-hide, selection) | on | on |
 | Quit | Cmd+Q / Ctrl+Q only | same (plus window close button) |
