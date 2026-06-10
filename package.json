@@ -1,0 +1,14 @@
+{
+  "name": "glyphs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "cozy keyboard playground in a CRT terminal shell",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^42.4.0"
+  }
+}

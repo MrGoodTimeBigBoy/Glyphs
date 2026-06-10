@@ -1,0 +1,59 @@
+/* ── reset & base ───────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+/* ── pointer-hidden state ───────────────────────────────────────── */
+/* pointer.js toggles this class on <body> */
+
+body.pointer-hidden,
+body.pointer-hidden * {
+  cursor: none;
+}
+
+/* ── screen container ───────────────────────────────────────────── */
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── cursor ─────────────────────────────────────────────────────── */
+/* Block cursor: roughly 0.6em × 1.2em at a ~28px monospace base.   */
+/* step-end holds each keyframe's value until the next keyframe     */
+/* (timing functions apply per segment), so this is a hard on/off   */
+/* square wave — on for [0%,50%), off for [50%,100%) — no fade.     */
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+.cursor {
+  width: 0.6em;
+  height: 1.2em;
+  font-size: 28px;          /* establishes the em base */
+  background: #33ff33;
+  /* faint phosphor glow — subtle, not distracting */
+  box-shadow: 0 0 6px #33ff33;
+  animation: blink 1.06s step-end infinite;
+}
