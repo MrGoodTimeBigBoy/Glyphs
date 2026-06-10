@@ -54,8 +54,9 @@ Target ~650–750 words, assembled from:
 `tools/tts/wordlist.txt` keeps its one-entry-per-line, append-only contract; the existing
 20 validation words stay at the top. The format gains an **optional second column**:
 `word [category]` (whitespace-separated; the generator takes token 0 as the word, token 1
-as the delivery category; no category → plain storyteller read). One file stays the single
-reviewable source of truth — no parallel category file to drift.
+as the delivery category; no category → plain storyteller read). `#` comment lines and
+blank lines are ignored, so the file can carry reviewable section headers. One file stays
+the single reviewable source of truth — no parallel category file to drift.
 
 **Checkpoint ★:** the curated list is committed and Ian reviews/edits it (skim for words he
 doesn't want, missing favorites) before any API spend. Generation starts only after his OK.
@@ -63,8 +64,9 @@ doesn't want, missing favorites) before any API spend. Generation starts only af
 ### A2. Generator changes (`tools/tts/generate_clips.py`)
 
 - Parse the two-column wordlist format (manifest words = token 0, order preserved).
-- New `CATEGORY_STYLES` dict (~8 short hints, written in the voice of the gate-accepted
-  ones). Hint resolution: `WORD_STYLES[word]` (individual override) → `CATEGORY_STYLES[cat]`
+- New `CATEGORY_STYLES` dict (one short hint per category — 15 categories as curated:
+  action, animal, body, celestial, color, family, feeling, food, home, magic, nature,
+  number, place, vehicle, weather — written in the voice of the gate-accepted ones). Hint resolution: `WORD_STYLES[word]` (individual override) → `CATEGORY_STYLES[cat]`
   → plain. `WORD_STYLES` keeps the gate-accepted entries; decorated-word hints get tuned
   there to match each flourish.
 - New **`deflate` interjection** (ROADMAP: junk input → "small deflate sound"): a soft,
