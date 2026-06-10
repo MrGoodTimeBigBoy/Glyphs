@@ -8,13 +8,38 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="screen">
-    <div class="cursor" aria-hidden="true"></div>
+  <div class="screen hub-screen">
+    <div class="hub" id="hub">
+      <div class="hub-history" id="hub-history"></div>
+      <div class="hub-input-line" id="hub-input-line">
+        <span class="hub-prompt">&gt;</span><span class="hub-text" id="hub-text"></span><span class="cursor" id="hub-cursor" aria-hidden="true"></span><span class="hub-ghost" id="hub-ghost"></span>
+      </div>
+      <div class="hub-alts" id="hub-alts"></div>
+    </div>
+    <div class="world-stub" id="world-stub" hidden>
+      <div class="world-stub-line" id="world-stub-line"></div>
+    </div>
+    <div class="flourish-layer" id="flourish-layer" aria-hidden="true"></div>
   </div>
 
+  <!--
+    Script load order per PHASE3-PLAN.md Part B:
+      namespace → containment → pointer → audio/manifest → audio →
+      state → crt → flourish → persist → hub → boot
+
+    audio/manifest.js is GENERATED — the hub works with whatever word set
+    it lists (audio.js falls back to safe defaults if it is absent).
+  -->
   <script src="js/namespace.js"></script>
   <script src="js/containment.js"></script>
   <script src="js/pointer.js"></script>
+  <script src="audio/manifest.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/crt.js"></script>
+  <script src="js/flourish.js"></script>
+  <script src="js/persist.js"></script>
+  <script src="js/hub.js"></script>
   <script src="js/boot.js"></script>
 </body>
 </html>

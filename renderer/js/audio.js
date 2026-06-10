@@ -10,6 +10,7 @@
      word clip        audio/<voice>/words/<word>.<ext>
      phonemic letter  audio/<voice>/letters-phonemic/<letter>.<ext>
      hmm              audio/<voice>/hmm.<ext>
+     deflate          audio/<voice>/deflate.<ext>
 */
 
 (function () {
@@ -74,16 +75,16 @@
      Non-primary voices only carry the bake-off subset. For any clip
      that is not in that subset, fall back to the primary voice.
 
-     kind: 'word' | 'letter' | 'hmm'
-     key:  the word string, or the letter character, or '' for hmm.  */
+     kind: 'word' | 'letter' | 'hmm' | 'deflate'
+     key:  the word string, or the letter character, or '' for hmm/deflate. */
   function voiceForClip(kind, key) {
     var cur = currentVoice();
     if (cur === primary()) {
       return cur;   /* primary always has everything */
     }
     /* Non-primary: check subset membership. */
-    if (kind === 'hmm') {
-      return cur;   /* hmm is present in every voice */
+    if (kind === 'hmm' || kind === 'deflate') {
+      return cur;   /* hmm and deflate are present in every voice */
     }
     if (kind === 'word') {
       var bw = bakeoffWords();
@@ -107,6 +108,7 @@
     if (kind === 'word')   return 'audio/' + voice + '/words/' + key + '.' + e;
     if (kind === 'letter') return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
     if (kind === 'hmm')    return 'audio/' + voice + '/hmm.' + e;
+    if (kind === 'deflate') return 'audio/' + voice + '/deflate.' + e;
     return null;
   }
 
@@ -282,6 +284,22 @@
     return { type: 'soundout', letters: letters };
   }
 
+  /* ── playDeflate() — junk-input deflate clip ─────────────────── */
+  /*
+     Phase 3 hub: junk input gets a small "pfff". Goes through the same
+     token/stop machinery as everything else, so it supersedes (and is
+     superseded by) any in-progress sequence. A missing clip is a silent
+     failure — playUrl console.warns and nothing plays.
+  */
+  function playDeflate() {
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('deflate', ''), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
+  }
+
   /* ── Register ─────────────────────────────────────────────────── */
 
   window.Glyphs.register('audio', {
@@ -295,6 +313,7 @@
       window.Glyphs.audio.cycleVoice     = cycleVoice;
       window.Glyphs.audio.isKnownWord    = isKnownWord;
       window.Glyphs.audio.play           = play;
+      window.Glyphs.audio.playDeflate    = playDeflate;
 
       /* Seed the current-voice index to point at the manifest primary. */
       var v = voices();

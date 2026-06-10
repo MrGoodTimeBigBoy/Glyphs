@@ -144,3 +144,253 @@ body.pointer-hidden * {
   color: #33ff33;
   text-shadow: 0 0 8px #33ff33;
 }
+
+/* ── Phase 3: the hub ───────────────────────────────────────────── */
+/* index.html only. History fills the screen, newest at the bottom,  */
+/* input line beneath it, alternatives list at the very bottom.      */
+
+.hub-screen {
+  position: relative;       /* anchors the stub + flourish layers */
+}
+
+.hub {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5em 2.5em 1.2em;
+  font-family: monospace;
+  font-size: 24px;
+  color: #33ff33;
+}
+
+/* display:flex would defeat the hidden attribute — be explicit. */
+.hub[hidden] {
+  display: none;
+}
+
+.hub-history {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;          /* older entries slide off the top */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* bottom-anchored: newest just above input */
+  gap: 0.3em;
+}
+
+/* Historical entries are dimmer than the live line. */
+.hub-entry {
+  color: #1a8f1a;
+  white-space: pre;
+}
+
+/* Unknown-but-spoken words: dimmer still, and italic. */
+.hub-entry.hub-soundout {
+  color: #147014;
+  font-style: italic;
+}
+
+/* Letter highlight during a sound-out (the .lit pattern). */
+.hub-entry .lit {
+  color: #33ff33;
+  text-shadow: 0 0 8px #33ff33;
+}
+
+/* ── hub input line ─────────────────────────────────────────────── */
+
+.hub-input-line {
+  display: flex;
+  align-items: center;
+  margin-top: 0.6em;
+  white-space: pre;
+}
+
+.hub-prompt {
+  color: #1a8f1a;            /* dim prompt glyph */
+  margin-right: 0.6ch;
+}
+
+.hub-text {
+  color: #33ff33;            /* bright phosphor — the live text */
+  white-space: pre;
+}
+
+/* A recalled entry sits on the input line dimmer than live typing. */
+.hub-input-line.hub-recalled .hub-text {
+  color: #1a8f1a;
+}
+
+/* Block cursor inherits the hub font size (overrides the 28px base). */
+.hub-input-line .cursor {
+  font-size: inherit;
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+}
+
+/* Ghost completion: gray, NOT green — clearly "not yet typed". */
+.hub-ghost {
+  color: #9a9a9a;
+  white-space: pre;
+  margin-left: 2px;
+}
+
+/* ── autocomplete alternatives list ─────────────────────────────── */
+
+.hub-alts {
+  min-height: 2.6em;         /* reserved so the layout never jumps */
+  margin-top: 0.4em;
+  padding-left: 2ch;
+  font-size: 0.8em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+}
+
+.hub-alt {
+  color: #147014;
+}
+
+.hub-alt.sel {
+  color: #26cc26;            /* highlighted alternative (ghost follows it) */
+}
+
+/* ── tiny feedback animations ───────────────────────────────────── */
+
+/* Up-arrow past the top of history: the stack flinches, stays put. */
+@keyframes hub-nudge {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+.hub-history.nudge {
+  animation: hub-nudge 140ms steps(2, jump-none);
+}
+
+/* Junk submit: the cursor shakes its head (blink keeps running). */
+@keyframes hub-wiggle {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-3px); }
+  75%      { transform: translateX(3px); }
+}
+
+.hub-input-line .cursor.wiggle {
+  animation:
+    blink 1.06s step-end infinite,
+    hub-wiggle 220ms linear 2;
+}
+
+/* ── world stubs ────────────────────────────────────────────────── */
+
+.world-stub {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-size: 22px;
+}
+
+.world-stub[hidden] {
+  display: none;
+}
+
+.world-stub-line {
+  color: #1a8f1a;            /* dim phosphor */
+}
+
+/* Key mash inside a stub: a brief bright ping, then back to dim. */
+@keyframes stub-ping {
+  0%   { color: #33ff33; text-shadow: 0 0 8px #33ff33; }
+  100% { color: #1a8f1a; text-shadow: none; }
+}
+
+.world-stub-line.ping {
+  animation: stub-ping 220ms ease-out;
+}
+
+/* ── flourish layer ─────────────────────────────────────────────── */
+
+.flourish-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;      /* never blocks typing or clicks */
+  z-index: 5;
+}
+
+.flourish-sprite {
+  position: absolute;
+  margin: 0;
+  font-family: monospace;
+  font-size: 20px;
+  line-height: 1.15;
+  white-space: pre;
+  color: #26cc26;
+  text-shadow: 0 0 6px rgba(51, 255, 51, 0.35);
+}
+
+.flourish-sprite.flourish-dim {
+  color: #1a8f1a;
+  text-shadow: none;
+}
+
+.flourish-sprite[hidden] {
+  display: none;
+}
+
+/* ── CRT atmosphere (crt.js gates these on body.crt-on) ─────────── */
+
+/* One dim horizontal band sweeping the screen top→bottom, ~10 s.   */
+.crt-scanline {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 140px;
+  pointer-events: none;
+  z-index: 20;
+  background: linear-gradient(
+    to bottom,
+    rgba(51, 255, 51, 0)    0%,
+    rgba(51, 255, 51, 0.05) 50%,
+    rgba(51, 255, 51, 0)    100%
+  );
+  transform: translateY(-140px);  /* parked off-screen until animated */
+}
+
+@keyframes crt-sweep {
+  from { transform: translateY(-140px); }
+  to   { transform: translateY(100vh); }
+}
+
+body.crt-on .crt-scanline {
+  animation: crt-sweep 10s linear infinite;
+}
+
+/* Phosphor flicker: a full-screen green tint whose opacity wobbles  */
+/* at barely perceptible amplitude. Alive, not busy.                 */
+.crt-flicker {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 19;
+  background: #33ff33;
+  opacity: 0;
+}
+
+@keyframes crt-flicker {
+  0%, 100% { opacity: 0.010; }
+  12%      { opacity: 0.016; }
+  23%      { opacity: 0.008; }
+  41%      { opacity: 0.018; }
+  57%      { opacity: 0.011; }
+  73%      { opacity: 0.020; }
+  86%      { opacity: 0.009; }
+}
+
+body.crt-on .crt-flicker {
+  animation: crt-flicker 4.3s linear infinite;
+}

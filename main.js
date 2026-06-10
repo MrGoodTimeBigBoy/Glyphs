@@ -1,6 +1,8 @@
 'use strict';
 
-const { app } = require('electron');
+const { app, ipcMain } = require('electron');
+const path = require('path');
+const fs = require('fs');
 const { createWindow } = require('./window');
 const { installAppLevel, attachToWindow } = require('./containment');
 
@@ -20,6 +22,48 @@ process.on('uncaughtException', (err) => {
 // Install app-level containment before the app is ready so that the
 // web-contents-created listener is in place for the very first webContents.
 installAppLevel({ isDev });
+
+// ── Phase 3: hub history persistence ────────────────────────────────────────
+// JSON file in userData; capped; atomic write (tmp + rename). Neither handler
+// ever throws to the renderer: load resolves [] and save resolves
+// { ok: false } on any failure.
+
+const HISTORY_CAP = 500;
+
+function historyPath() {
+  return path.join(app.getPath('userData'), 'history.json');
+}
+
+// Keep only well-formed { word, type, ts } entries, newest-last, capped.
+function sanitizeHistory(entries) {
+  if (!Array.isArray(entries)) return [];
+  const out = [];
+  for (const e of entries) {
+    if (!e || typeof e.word !== 'string' || typeof e.type !== 'string') continue;
+    out.push({ word: e.word.slice(0, 64), type: e.type, ts: Number(e.ts) || 0 });
+  }
+  return out.slice(-HISTORY_CAP);
+}
+
+ipcMain.handle('glyphs:history-load', () => {
+  try {
+    return sanitizeHistory(JSON.parse(fs.readFileSync(historyPath(), 'utf8')));
+  } catch (err) {
+    return []; // missing file, bad JSON, unreadable disk — all the same: empty
+  }
+});
+
+ipcMain.handle('glyphs:history-save', (event, entries) => {
+  try {
+    const file = historyPath();
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(sanitizeHistory(entries)));
+    fs.renameSync(tmp, file); // atomic on the same filesystem
+    return { ok: true };
+  } catch (err) {
+    return { ok: false };
+  }
+});
 
 // Single-window kiosk: quit on all platforms when the window is closed.
 // No macOS "linger with no windows" behaviour.
