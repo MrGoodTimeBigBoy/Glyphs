@@ -804,3 +804,100 @@ body.crt-on .crt-flicker {
 }
 
 /* DRAW-STYLES-END */
+
+/* ════════════════════════════════════════════════════════════════════
+   say world (Phase 6) — owned by say.js. Only the say agent edits
+   between these markers.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The say world: Simon Says for spelling. One word, large glowing      */
+/* letters with generous spacing, a dim baseline beneath it. All the    */
+/* motion here is one-shot CSS — say.js only toggles classes.           */
+
+.say {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  color: #33ff33;
+}
+
+/* display:flex would defeat the hidden attribute — be explicit. */
+.say[hidden] {
+  display: none;
+}
+
+/* The word: large letters, generous spacing, centered.                 */
+.say-word {
+  display: flex;
+  justify-content: center;
+  gap: 0.55em;
+  font-size: clamp(56px, 11vw, 120px);
+  line-height: 1;
+}
+
+/* A letter tile. The transition asymmetry is the design: lighting up   */
+/* is a fast pop (.lit overrides with its own quick transition) while   */
+/* dimming inherits this slow base transition — so the wrong-key reset  */
+/* eases the lit letters back gently, never harshly.                    */
+.say-letter {
+  color: #0f4f0f;            /* ghost — readable, clearly waiting */
+  min-width: 1ch;
+  text-align: center;
+  transition: color 650ms ease-out, text-shadow 650ms ease-out;
+}
+
+.say-letter.lit {
+  color: #33ff33;
+  text-shadow: 0 0 14px rgba(51, 255, 51, 0.6);
+  transition: color 70ms ease-out, text-shadow 70ms ease-out;
+}
+
+/* A clicked tile (or a show-phase key): a glow-pulse, like a touch —   */
+/* bright at 0%, then the browser eases back to the tile's own state.   */
+@keyframes say-letter-ping {
+  0% { color: #26cc26; text-shadow: 0 0 10px rgba(51, 255, 51, 0.55); }
+}
+
+.say-letter.ping {
+  animation: say-letter-ping 260ms ease-out;
+}
+
+/* Completion: the whole word glows brightly and pulses for a moment.   */
+.say-letter.bright {
+  color: #33ff33;
+  text-shadow: 0 0 18px rgba(51, 255, 51, 0.9);
+  transition: color 70ms ease-out, text-shadow 70ms ease-out;
+}
+
+@keyframes say-word-pulse {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 14px rgba(51, 255, 51, 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 24px rgba(51, 255, 51, 0.95); }
+}
+
+.say-word.say-complete .say-letter {
+  animation: say-word-pulse 700ms ease-in-out 3;
+}
+
+/* The baseline under the word: dim and dashed, present but never       */
+/* bossy — and the canvas for the generic keypress ping.                */
+.say-line {
+  width: 42%;
+  margin-top: 1.4em;
+  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+}
+
+@keyframes say-line-ping {
+  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
+  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+}
+
+.say-line.ping {
+  animation: say-line-ping 240ms ease-out;
+}
+
+/* SAY-STYLES-END */
