@@ -1,0 +1,46 @@
+:root {
+  --bg: #000000;
+  --phosphor: #33ff33;
+  --phosphor-dim: #1f9e1f;
+  --phosphor-glow: rgba(51, 255, 51, 0.55);
+  --font-mono: "SF Mono", "Menlo", "Consolas", "Courier New", monospace;
+  --cursor-blink-period: 1.06s;
+  --cursor-w: 0.6em;
+  --cursor-h: 1.1em;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  color: var(--phosphor);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.cursor-hidden {
+  cursor: none;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
