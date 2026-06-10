@@ -80,12 +80,12 @@ Renderer registers **no** keyboard handlers in Phase 1; main registers **no** co
 Evaluated in order for every input event on the window's webContents. `primary` = `input.meta` on macOS, `input.control` elsewhere. Compare `input.key` lowercased (layout-aware: Cmd+Q must follow the layout's Q, so `key`, not `code`).
 
 1. **Quit:** `primary && key === 'q' && !shift && !alt` → `event.preventDefault()`, and on a non-autorepeat `keyDown`, `app.quit()`. We must own quit ourselves: a null application menu removes macOS's built-in Cmd+Q binding.
-2. **Dev hatches (dev mode only):** Cmd/Ctrl+R reload; Cmd+Opt+I (mac) / Ctrl+Shift+I / F12 devtools. Handled *programmatically* (`reload()` / `toggleDevTools()` + preventDefault): the null application menu removed every native accelerator, so passing the chord through would do nothing.
+2. **Dev hatches (dev mode only):** Cmd/Ctrl+R reload; Cmd+Opt+I (mac) / Ctrl+Shift+I / F12 devtools. Handled *programmatically* (`reload()` / `toggleDevTools()` + preventDefault): the null application menu removed every native accelerator, so passing the chord through would do nothing. The macOS devtools chord matches the physical key (`input.code === 'KeyI'`): Option transforms characters on macOS (Option+I is a dead key), so `input.key` never reads 'i' while Alt is held.
 3. **Deny-by-default for chords:** anything remaining with `meta` or `control` held → `preventDefault()`. Enumerating bad shortcuts (Cmd+W, Cmd+R, Cmd+Shift+I, Cmd+M, Cmd+H, Cmd+F, Cmd+P, zoom…) is the bug-prone shape; deny-all-chords with one allowlisted exit swallows the ones we didn't think of.
 4. **Function keys:** F1–F12 regardless of modifiers → `preventDefault()` (F11 fullscreen toggle, F12 devtools, Alt+F4 lands here as key=F4).
 5. **Everything else passes:** plain letters, Shift+letters, arrows, Escape, Enter. Phase 1 ignores them in the renderer, but mash-absorption is a design principle and Phase 3 needs typing.
 
-`globalShortcut` is deliberately **not** used — hijacking system-wide shortcuts is invasive and flaky. OS-level escapes that never reach the app (Cmd+Tab, Cmd+Space Spotlight, Mission Control / trackpad gestures, Cmd+Opt+Esc force-quit) are accepted, documented limitations for the README, not things to code around.
+`globalShortcut` is deliberately **not** used — hijacking system-wide shortcuts is invasive and flaky. On macOS, kiosk mode's presentation options turn out to disable Cmd+Tab, Spotlight, Mission Control, and Force Quit while the app is frontmost (hardware-verified 2026-06). The residual escapes — third-party global hotkeys (e.g. the ChatGPT app's Option+Space launcher), Universal Control pointer drift to nearby devices, and the power button — never reach the app and are documented README limitations with environmental mitigations, not things to code around.
 
 No `close` interception: with Cmd+W swallowed and no visible chrome, close only comes from `app.quit()`, and the quit path must stay clean.
 

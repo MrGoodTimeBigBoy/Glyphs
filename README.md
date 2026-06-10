@@ -29,15 +29,17 @@ A `--smoke` flag (`npm run dev -- --smoke`) auto-quits ~2s after the renderer lo
 
 Everything that reaches the app is contained: browser shortcuts (Cmd+R, Cmd+W, Cmd+Shift+I, Cmd+M, Cmd+H, Cmd+F, Cmd+P, zoom…) are swallowed deny-by-default with Cmd+Q as the single allowlisted exit; F1–F12 are swallowed; navigation and popup windows are blocked; right-click, drag/drop, and text selection are dead at the DOM level.
 
-Some escapes live **above the app** at the OS level and cannot be intercepted by any application:
+**What kiosk mode disables on macOS** (verified on hardware, June 2026): while Glyphs runs in prod, the presentation options requested by kiosk mode disable **Cmd+Tab**, **Mission Control**, **Spotlight (Cmd+Space)**, and **Force Quit (Cmd+Opt+Esc)**, along with the Dock and menu bar. Only Cmd+Q exits. In dev mode (windowed, non-kiosk) Cmd+Tab and Force Quit behave normally.
 
-- **Cmd+Tab** — the macOS app switcher still switches apps.
-- **Mission Control** — Ctrl+Up, F3-as-media-key, and three/four-finger trackpad swipes still work.
-- **Cmd+Opt+Esc** — Force Quit always works (and is the recovery path if the app ever wedges).
-- **Cmd+Space** — Spotlight still opens over the app.
-- The power button, Touch ID, and notification-center edge swipes are untouched.
+**What still gets through** (also verified on hardware):
 
-These are accepted, documented limitations — Glyphs deliberately does not register system-wide shortcut grabs. If harder lockdown is ever needed, use a dedicated macOS user account for the child and/or Screen Time app limits; that's an OS configuration concern, not an app feature.
+- **Third-party global hotkeys.** Apps that register system-wide hotkeys fire over the kiosk — e.g. the ChatGPT desktop app's Option+Space launcher appears, and submitting it moves focus to ChatGPT. These events never reach Glyphs and cannot be intercepted. Quit such apps or disable their hotkeys before handing the machine over.
+- **Universal Control.** Holding the pointer at a screen edge can slide it onto a nearby iPad or Mac. Disable it in System Settings → Displays → Advanced ("Allow your pointer and keyboard to move between any nearby Mac or iPad"), or keep other devices away.
+- **The power button and the lid.**
+
+Recovery note: because kiosk mode disables Force Quit, if the app ever hard-wedges the way out is holding the power button (or killing it over SSH). Cmd+Q is handled in the main process, so a renderer-side fault alone can't trap you.
+
+Glyphs deliberately registers no system-wide shortcut grabs of its own. For harder lockdown (a child-dedicated macOS user account, Screen Time limits), that's OS configuration, not an app feature.
 
 ## Architecture: the containment layers
 

@@ -76,8 +76,11 @@ function attachToWindow(win, { isDev } = {}) {
       }
 
       // DevTools: Cmd+Option+I (darwin) | Ctrl+Shift+I (others) | F12
+      // On macOS, Option transforms the character (Option+I is a dead key),
+      // so input.key never reads 'i' while Alt is held — match the physical
+      // key (input.code, layout-independent) for that chord instead.
       const devtoolsChord =
-        (darwin && input.meta && input.alt && key === 'i') ||
+        (darwin && input.meta && input.alt && input.code === 'KeyI') ||
         (!darwin && input.control && input.shift && key === 'i') ||
         key === 'f12';
       if (devtoolsChord) {
