@@ -16,9 +16,9 @@
   'use strict';
 
   /* ── Manifest defaults (used when manifest.js has not run yet) ─── */
-  var DEFAULT_PRIMARY  = 'sulafat';
+  var DEFAULT_PRIMARY  = 'callirrhoe';
   var DEFAULT_EXT      = 'wav';
-  var DEFAULT_VOICES   = ['sulafat'];
+  var DEFAULT_VOICES   = ['callirrhoe'];
 
   /* Bake-off word and letter subsets per PHASE2-PLAN.md.
      Non-primary voices only carry clips for these keys.             */
@@ -26,8 +26,9 @@
   var BAKEOFF_LETTERS = ['c', 'a', 't'];
   /* hmm is present in every voice — no need to list it here.       */
 
-  /* Gap between letters during sound-out, in ms. */
-  var LETTER_GAP_MS = 120;
+  /* Gap between letters during sound-out, in ms.
+     Trimmed from 120 at the listening gate ("a shade long").         */
+  var LETTER_GAP_MS = 100;
 
   /* ── State ────────────────────────────────────────────────────── */
   var _currentVoiceIndex = 0;

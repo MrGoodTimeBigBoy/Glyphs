@@ -38,9 +38,11 @@ Usage:
 """
 
 import argparse
+import array
 import base64
 import io
 import json
+import math
 import os
 import pathlib
 import re
@@ -79,10 +81,13 @@ DEFAULT_API = "openrouter"
 # ---------------------------------------------------------------------------
 
 # Primary voice used for the full word set.
-PRIMARY_VOICE = "sulafat"
+# Gate decision (Ian, 2026-06-10 listening session): Callirrhoe won the
+# bake-off.
+PRIMARY_VOICE = "callirrhoe"
 
-# Bake-off voices get only the subset below.
-BAKEOFF_VOICES = ["aoede", "callirrhoe"]
+# Former bake-off voices, kept at subset size so the harness can still
+# A/B warmth against the winner while delivery is being iterated.
+BAKEOFF_VOICES = ["sulafat", "aoede"]
 
 # Map from directory name (lowercase) to the API voice string sent in the
 # request body. All three verified accepted with this casing (2026-06-10).
@@ -101,18 +106,48 @@ BAKEOFF_HMM = True
 # Style prompts
 # ---------------------------------------------------------------------------
 
-# Base storyteller style applied before most content.
-STYLE = (
+# Base storyteller style applied to every word clip, with an optional
+# per-word delivery hint spliced in between prefix and suffix.
+STYLE_PREFIX = (
     "Read this aloud in a clear, warm, friendly voice, like a gentle "
-    "storyteller reading to a young child. Natural and unhurried:"
+    "storyteller reading to a young child."
 )
+STYLE_SUFFIX = "Natural and unhurried:"
 
-# Specialised prompts for each content type.
-# The word is QUOTED in the prompt. Bare short/function words after the
-# colon make the model return empty audio ("and", "go", "me", …) or read
-# the instruction itself aloud for ~20s ("the") — verified 2026-06-10;
-# quoting pins the content and fixed every case.
-PROMPT_WORD = STYLE  # + ' "' + word + '"'
+# Per-word delivery hints (gate feedback: one uniform delivery across all
+# twenty words felt repetitive; the animals "wanted to be more active").
+# Words not listed get the plain storyteller delivery. Iterate by ear —
+# edit a hint, then re-render that word with:
+#   python3 tools/tts/generate_clips.py --voices callirrhoe --force
+WORD_STYLES = {
+    "cat":   "Playful and lively, as if the cat just pounced.",
+    "dog":   "Upbeat and eager, with a smile.",
+    "bird":  "Light and bright, almost chirpy.",
+    "fish":  "Bubbly and amused.",
+    "run":   "Quick and energetic, like an invitation to play chase.",
+    "go":    "Encouraging and eager, ready to set off.",
+    "sun":   "Bright and delighted, like greeting a sunny morning.",
+    "moon":  "Soft and dreamy, a whisper of wonder.",
+    "star":  "Hushed wonder, like making a wish.",
+    "tree":  "Calm and steady, full of quiet awe.",
+    "rain":  "Gentle and soothing, like watching drops on a window.",
+    "apple": "Cheerful and crisp.",
+    "mom":   "Extra loving and tender.",
+    "dad":   "Warm and proud.",
+    # the, and, see, like, you, me — plain storyteller delivery.
+}
+
+def word_prompt(word: str) -> str:
+    """Build the TTS prompt for a word clip.
+
+    The word is QUOTED in the prompt. Bare short/function words after the
+    colon make the model return empty audio ("and", "go", "me", …) or read
+    the instruction itself aloud for ~20s ("the") — verified 2026-06-10;
+    quoting pins the content and fixed every case.
+    """
+    hint = WORD_STYLES.get(word)
+    middle = f" {hint} " if hint else " "
+    return f'{STYLE_PREFIX}{middle}{STYLE_SUFFIX} "{word}"'
 
 PROMPT_PHONEMIC = (
     "Say only this letter sound, clearly and warmly, the way you sound out "
@@ -130,11 +165,14 @@ PROMPT_HMM = (
 # ---------------------------------------------------------------------------
 
 # Text fed to TTS for each letter's phonemic/short sound.
+# "r" is spelled "rrr" — the original "rr" came out as "ooo" (gate
+# feedback). If another letter sounds wrong, fix its spelling here and
+# re-render with --voices callirrhoe --force.
 PHONEMIC_MAP = {
     "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh",
     "f": "ff",  "g": "guh", "h": "huh", "i": "ih",  "j": "juh",
     "k": "kuh", "l": "ll",  "m": "mm",  "n": "nn",  "o": "aw",
-    "p": "puh", "q": "kwuh","r": "rr",  "s": "ss",  "t": "tuh",
+    "p": "puh", "q": "kwuh","r": "rrr", "s": "ss",  "t": "tuh",
     "u": "uh",  "v": "vv",  "w": "wuh", "x": "ks",  "y": "yuh",
     "z": "zz",
 }
@@ -221,16 +259,40 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000,
         wf.writeframes(pcm_bytes)
     return buf.getvalue()
 
+# Tail conditioning: several raw clips end on a hot sample, which plays as
+# an audible click / cut-off (gate feedback). Fade the tail to zero and pad
+# with a touch of silence before wrapping into WAV.
+FADE_OUT_MS = 40
+TAIL_PAD_MS = 80
+
+def condition_tail(pcm_bytes: bytes, sample_rate: int,
+                   channels: int = 1) -> bytes:
+    """Apply a half-cosine fade over the last FADE_OUT_MS of s16le PCM and
+    append TAIL_PAD_MS of silence."""
+    samples = array.array("h")
+    samples.frombytes(pcm_bytes[: (len(pcm_bytes) // 2) * 2])
+    n_fade = min(len(samples),
+                 int(sample_rate * channels * FADE_OUT_MS / 1000))
+    start = len(samples) - n_fade
+    for j in range(n_fade):
+        gain = 0.5 * (1.0 + math.cos(math.pi * (j + 1) / n_fade))
+        samples[start + j] = int(samples[start + j] * gain)
+    samples.extend([0] * int(sample_rate * channels * TAIL_PAD_MS / 1000))
+    return samples.tobytes()
+
 def finalize_audio(raw: bytes, sample_rate: int = 24000,
                    channels: int = 1) -> tuple[bytes, str]:
     """Turn raw API audio bytes into writable file bytes + extension.
 
-    Container formats (detected by magic bytes) pass through verbatim;
-    bare PCM is wrapped in a WAV header at the given rate/channels.
+    Container formats (detected by magic bytes) pass through verbatim —
+    no tail conditioning. Bare PCM gets its tail conditioned, then is
+    wrapped in a WAV header at the given rate/channels.
     """
     ext, is_container = detect_audio_format(raw)
     if not is_container:
-        return pcm_to_wav(raw, sample_rate=sample_rate, channels=channels), "wav"
+        conditioned = condition_tail(raw, sample_rate, channels)
+        return pcm_to_wav(conditioned, sample_rate=sample_rate,
+                          channels=channels), "wav"
     return raw, ext
 
 # ---------------------------------------------------------------------------
@@ -503,7 +565,7 @@ def list_models(api: str, api_key: str | None, model: str) -> None:
 def run_probe(api: str, model: str, api_key: str, out_dir: pathlib.Path,
               voice_dirname: str, voice_api: str) -> None:
     """Generate ONE clip ('cat', primary voice) and print diagnostic info."""
-    prompt = f'{PROMPT_WORD} "cat"'
+    prompt = word_prompt("cat")
     print(f"\n[probe] api={api}  model={model!r}  voice_dir={voice_dirname!r}"
           f"  voice_api={voice_api!r}")
     print(f"[probe] prompt: {prompt!r}")
@@ -615,7 +677,7 @@ def clips_for_voice(words: list[str], voice_dirname: str,
         clips.append({
             "category": "words",
             "stem": word,
-            "prompt": f'{PROMPT_WORD} "{word}"',
+            "prompt": word_prompt(word),
         })
 
     # Letters — phonemic sounds

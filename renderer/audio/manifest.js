@@ -2,8 +2,8 @@
 window.Glyphs = window.Glyphs || {};
 window.Glyphs.audio = window.Glyphs.audio || {};
 window.Glyphs.audio.manifest = {
-  primary: "sulafat",
-  voices: ["sulafat", "aoede", "callirrhoe"],
+  primary: "callirrhoe",
+  voices: ["callirrhoe", "sulafat", "aoede"],
   ext: "wav",
   words: ["the", "and", "run", "mom", "dad", "see", "go", "like", "you", "me", "cat", "dog", "sun", "moon", "tree", "star", "apple", "fish", "bird", "rain"],
   bakeoffWords: ["cat", "sun", "apple", "the", "run"]

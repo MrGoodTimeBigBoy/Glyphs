@@ -30,9 +30,9 @@ no robot TTS voice anywhere in the experience.
 | **API (plan of record)** | OpenRouter — `POST https://openrouter.ai/api/v1/audio/speech` |
 | **Model** | `google/gemini-3.1-flash-tts-preview` (provider: Google Vertex; verified live 2026-06-10) |
 | **Key** | `OPENROUTER_API_KEY` |
-| **Primary voice** | **Sulafat** — full word set + all letters (phonemic and name) + hmm |
-| **Bake-off voices** | **Aoede**, **Callirrhoe** — subset only (see below) |
-| **Output format** | WAV / PCM 24 kHz mono, 16-bit signed little-endian |
+| **Primary voice** | **Callirrhoe** — chose at the 2026-06-10 listening gate; full word set + all letters (phonemic and name) + hmm |
+| **Comparison voices** | **Sulafat**, **Aoede** — bake-off subset kept for A/B while delivery is iterated |
+| **Output format** | WAV / PCM 24 kHz mono, 16-bit signed little-endian, tail-conditioned (see below) |
 
 ### The OpenRouter TTS contract (hard-won, verified 2026-06-10)
 
@@ -65,34 +65,46 @@ https://aistudio.google.com/apikey — and the default model id
 `generativelanguage.googleapis.com` is reachable from the container
 environment.
 
-### Style prompt
+### Style prompt and per-word delivery
 
-All clips use an expressive-storyteller style:
+Every word clip uses the storyteller base style:
 
 > "Read this aloud in a clear, warm, friendly voice, like a gentle storyteller
-> reading to a young child. Natural and unhurried:"
+> reading to a young child. *(optional per-word hint)* Natural and unhurried:
+> "*word*""
 
-**Word clips put the target word in double quotes** after that prompt. This is
-load-bearing, not cosmetic: with a bare word after the colon, the model
-returned *empty audio* for short function words ("and", "go", "me", …) and
-read the instruction itself aloud for ~20 seconds for "the". Quoting fixed
-every case (verified 2026-06-10).
+The **per-word hints** live in `WORD_STYLES` in `generate_clips.py` — gate
+feedback was that one uniform delivery across all twenty words felt
+repetitive, and e.g. the animals wanted to be more active. Words without a
+hint get the plain storyteller read. To iterate on a delivery: edit the hint,
+then `python3 tools/tts/generate_clips.py --voices callirrhoe --force` (or
+delete just that word's WAV and re-run without `--force`).
+
+**The target word stays in double quotes.** This is load-bearing, not
+cosmetic: with a bare word after the colon, the model returned *empty audio*
+for short function words ("and", "go", "me", …) and read the instruction
+itself aloud for ~20 seconds for "the". Quoting fixed every case (verified
+2026-06-10).
 
 Phonemic letter clips use a separate prompt that instructs the model to produce
-only the **phonetic sound** (not the letter name). The prompts are defined as
-module-level constants in `generate_clips.py` and are easy to adjust.
+only the **phonetic sound** (not the letter name). The spellings are data in
+`PHONEMIC_MAP` — e.g. "r" is spelled `rrr` because `rr` rendered as "ooo"
+(gate feedback). Wrong-sounding letters are fixed by adjusting the spelling
+there and re-rendering.
 
-### Bake-off subset
+### Voice line-up (bake-off resolved)
 
-The bake-off voices (Aoede, Callirrhoe) receive a reduced clip set for
-evaluation purposes:
+The 2026-06-10 listening gate picked **Callirrhoe** as the primary voice.
+Sulafat and Aoede remain in the tree at bake-off-subset size so the harness
+can still A/B warmth while delivery is iterated:
 
 - Words: `cat sun apple the run`
 - Phonemic letters: `c a t`
 - hmm
 
-After listening and choosing a preferred voice, run a full pass with that
-voice using `--voices <chosen> --force`.
+Once delivery is settled they can be dropped entirely (delete their
+directories and remove them from `BAKEOFF_VOICES`, then re-run to refresh the
+manifest).
 
 ---
 
@@ -117,7 +129,7 @@ python3 tools/tts/generate_clips.py --probe
 
 This generates exactly **one clip** (the word "cat", primary voice), prints
 the response Content-Type and detected audio format, and writes the clip to
-`renderer/audio/sulafat/words/cat.wav`. Inspect the output to confirm:
+`renderer/audio/callirrhoe/words/cat.wav`. Inspect the output to confirm:
 
 - The model ID is accepted (no "model not found" error).
 - Audio bytes come back (the probe prints size, framing, and duration).
@@ -142,14 +154,15 @@ Or via npm:
 npm run gen-clips
 ```
 
-This generates all clips for all voices (primary Sulafat + bake-off Aoede and
-Callirrhoe) and writes `renderer/audio/manifest.js`.
+This generates all clips for all voices (primary Callirrhoe full set +
+Sulafat/Aoede comparison subsets) and writes `renderer/audio/manifest.js`.
 
 ### Other useful invocations
 
 ```sh
-# Re-generate everything for one voice (overwrite existing):
-python3 tools/tts/generate_clips.py --voices sulafat --force
+# Re-generate everything for one voice (overwrite existing) — the usual
+# move after editing WORD_STYLES or PHONEMIC_MAP:
+python3 tools/tts/generate_clips.py --voices callirrhoe --force
 
 # Primary voice only (skip bake-off voices):
 python3 tools/tts/generate_clips.py --primary-only
@@ -207,7 +220,7 @@ casing, then run `--force`.
 ```
 renderer/audio/
   manifest.js                     # generated — do not edit by hand
-  sulafat/
+  callirrhoe/                     # primary (gate pick)
     words/
       the.wav
       and.wav
@@ -217,12 +230,12 @@ renderer/audio/
     letters-name/
       a.wav  b.wav  … z.wav       # letter names ("ay", "bee", …)
     hmm.wav
-  aoede/
+  sulafat/                        # comparison voice, subset only
     words/  cat.wav  sun.wav  apple.wav  the.wav  run.wav
     letters-phonemic/  c.wav  a.wav  t.wav
     hmm.wav
-  callirrhoe/
-    … (same bake-off subset as aoede)
+  aoede/
+    … (same subset as sulafat)
 ```
 
 ---
@@ -234,11 +247,15 @@ renderer/audio/
 - **Encoding:** signed 16-bit little-endian PCM (L16)
 - **Channels:** mono (1)
 - **Container:** RIFF WAV (stdlib `wave` module)
+- **Tail conditioning:** a 40 ms half-cosine fade-out plus 80 ms of trailing
+  silence is applied to every PCM clip before wrapping. Raw clips sometimes
+  end on a hot sample, which played as an audible click/cut-off at the gate.
+  Knobs: `FADE_OUT_MS` / `TAIL_PAD_MS` in `generate_clips.py`.
 
 If the API returns an already-containerized file (WAV, MP3, or Ogg — detected
 by magic bytes), the bytes are written verbatim with the correct extension
-instead of being re-wrapped. The manifest's `ext` field reflects the actual
-extension used.
+instead of being re-wrapped (no tail conditioning). The manifest's `ext`
+field reflects the actual extension used.
 
 ---
 
