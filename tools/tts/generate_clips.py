@@ -101,6 +101,7 @@ VOICES = {
 BAKEOFF_WORDS = ["cat", "sun", "apple", "the", "run"]
 BAKEOFF_LETTERS = ["c", "a", "t"]  # phonemic only
 BAKEOFF_HMM = True
+BAKEOFF_DEFLATE = True
 
 # ---------------------------------------------------------------------------
 # Style prompts
@@ -137,8 +138,35 @@ WORD_STYLES = {
     # the, and, see, like, you, me — plain storyteller delivery.
 }
 
-def word_prompt(word: str) -> str:
+# Category-level delivery hints for the Phase 3 bundle (wordlist.txt's
+# optional second column picks one). Written in the voice of the
+# gate-accepted WORD_STYLES entries — one short sentence each. A word's
+# WORD_STYLES entry, if present, overrides its category hint; words with
+# neither get the plain storyteller read.
+CATEGORY_STYLES = {
+    "action":    "Quick and energetic, like an invitation to play.",
+    "animal":    "Playful and lively, with a smile.",
+    "body":      "Friendly and playful, like a game of peek-a-boo.",
+    "celestial": "Hushed wonder, soft and dreamy.",
+    "color":     "Bright and vivid.",
+    "family":    "Extra warm and loving.",
+    "feeling":   "Expressive — let the word's feeling color the voice.",
+    "food":      "Cheerful and appetizing.",
+    "home":      "Cozy and familiar.",
+    "magic":     "A twinkle of mystery and delight.",
+    "nature":    "Calm and fresh, full of quiet awe.",
+    "number":    "Clear and bouncy, like counting out a game.",
+    "place":     "Inviting and curious, like setting off somewhere fun.",
+    "vehicle":   "Energetic and full of motion, zooming past.",
+    "weather":   "Gentle and atmospheric, like watching it through a window.",
+}
+
+def word_prompt(word: str, category: str | None = None) -> str:
     """Build the TTS prompt for a word clip.
+
+    The delivery hint resolves WORD_STYLES[word] (individual override) →
+    CATEGORY_STYLES[category] (wordlist column 2) → none (plain
+    storyteller read).
 
     The word is QUOTED in the prompt. Bare short/function words after the
     colon make the model return empty audio ("and", "go", "me", …) or read
@@ -146,6 +174,8 @@ def word_prompt(word: str) -> str:
     quoting pins the content and fixed every case.
     """
     hint = WORD_STYLES.get(word)
+    if hint is None and category is not None:
+        hint = CATEGORY_STYLES.get(category)
     middle = f" {hint} " if hint else " "
     return f'{STYLE_PREFIX}{middle}{STYLE_SUFFIX} "{word}"'
 
@@ -158,6 +188,11 @@ PROMPT_LETTER_NAME = "Say the name of this letter, clearly and warmly:"
 
 PROMPT_HMM = (
     "Say a soft, thoughtful 'hmm', warm and curious, as if gently wondering:"
+)
+
+PROMPT_DEFLATE = (
+    "Make a soft, breathy, deflating 'pfff' sound, gentle and amused, like "
+    "a little balloon letting its air out — friendly, never harsh:"
 )
 
 # ---------------------------------------------------------------------------
@@ -654,11 +689,39 @@ def should_skip(base_path: pathlib.Path, force: bool) -> tuple[bool, pathlib.Pat
     return False, None
 
 # ---------------------------------------------------------------------------
+# Word list parsing
+# ---------------------------------------------------------------------------
+
+def parse_wordlist(words_file: pathlib.Path) -> tuple[list[str], dict[str, str]]:
+    """Parse the word list file into (words, word→category map).
+
+    Format — one entry per line, whitespace-separated:
+        word [category]
+    Blank lines and lines starting with '#' are ignored, so the file can
+    carry reviewable section headers. Token 0 is the word (file order is
+    manifest order); token 1, when present, names a CATEGORY_STYLES
+    delivery hint. No category → plain storyteller read (or the word's
+    own WORD_STYLES entry, which always wins).
+    """
+    words: list[str] = []
+    categories: dict[str, str] = {}
+    for line in words_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = line.split()
+        word = tokens[0]
+        words.append(word)
+        if len(tokens) > 1:
+            categories[word] = tokens[1]
+    return words, categories
+
+# ---------------------------------------------------------------------------
 # Build clip list for a voice
 # ---------------------------------------------------------------------------
 
-def clips_for_voice(words: list[str], voice_dirname: str,
-                    is_bakeoff: bool) -> list[dict]:
+def clips_for_voice(words: list[str], categories: dict[str, str],
+                    voice_dirname: str, is_bakeoff: bool) -> list[dict]:
     """Return a list of clip descriptors for a given voice.
 
     Each descriptor is a dict:
@@ -666,6 +729,7 @@ def clips_for_voice(words: list[str], voice_dirname: str,
 
     Args:
         words:        Full word list.
+        categories:   Word → delivery-category map (CATEGORY_STYLES keys).
         voice_dirname: Directory name (lowercase).
         is_bakeoff:   True → only generate the bake-off subset.
     """
@@ -677,7 +741,7 @@ def clips_for_voice(words: list[str], voice_dirname: str,
         clips.append({
             "category": "words",
             "stem": word,
-            "prompt": word_prompt(word),
+            "prompt": word_prompt(word, categories.get(word)),
         })
 
     # Letters — phonemic sounds
@@ -708,6 +772,16 @@ def clips_for_voice(words: list[str], voice_dirname: str,
             "category": "hmm",
             "stem": "hmm",
             "prompt": f"{PROMPT_HMM} hmm",
+        })
+
+    # deflate (junk input — DESIGN.md: no failure states, keep it friendly)
+    if is_bakeoff and not BAKEOFF_DEFLATE:
+        pass
+    else:
+        clips.append({
+            "category": "deflate",
+            "stem": "deflate",
+            "prompt": f"{PROMPT_DEFLATE} pfff",
         })
 
     return clips
@@ -821,7 +895,8 @@ Examples:
     parser.add_argument(
         "--words", default=None, metavar="FILE",
         help=(
-            "Path to word list file (one word per line). "
+            "Path to word list file (one 'word [category]' entry per "
+            "line; '#' comments and blank lines ignored). "
             "Default: tools/tts/wordlist.txt relative to repo root."
         ),
     )
@@ -894,10 +969,7 @@ def main(argv=None):
         print(f"ERROR: word list file not found: {words_file}", file=sys.stderr)
         sys.exit(1)
 
-    raw_words = [
-        w.strip() for w in words_file.read_text(encoding="utf-8").splitlines()
-        if w.strip()
-    ]
+    raw_words, word_categories = parse_wordlist(words_file)
     if not raw_words:
         print(f"ERROR: word list file is empty: {words_file}", file=sys.stderr)
         sys.exit(1)
@@ -955,7 +1027,7 @@ def main(argv=None):
 
     for voice_dirname in requested_voices:
         is_bakeoff = (voice_dirname != PRIMARY_VOICE) and (voice_dirname in BAKEOFF_VOICES)
-        clips = clips_for_voice(raw_words, voice_dirname, is_bakeoff)
+        clips = clips_for_voice(raw_words, word_categories, voice_dirname, is_bakeoff)
 
         print(f"\n── Voice: {voice_dirname} ({'bake-off subset' if is_bakeoff else 'full set'}) "
               f"({len(clips)} clips) ──")
@@ -967,14 +1039,14 @@ def main(argv=None):
             dest_base = clip_path(out_dir, voice_dirname,
                                   clip["category"], clip["stem"])
 
-            # Special handling for hmm: the stem is "hmm" and there's no
-            # subdirectory — it lives directly under voicedir/hmm.wav
-            # We treat it as category="." stem="hmm" pattern; instead
-            # the clip descriptor has category="hmm" stem="hmm" which means
+            # Special handling for the interjections (hmm, deflate): the
+            # stem equals the category and there's no subdirectory — they
+            # live directly under voicedir/<stem>.wav. The descriptor's
+            # category="hmm" stem="hmm" would otherwise mean
             # out_dir/voice/hmm/hmm.wav — we want out_dir/voice/hmm.wav.
-            # Re-map: if category == stem == "hmm", output is voicedir/hmm.*
-            if clip["category"] == "hmm":
-                dest_base = out_dir / voice_dirname / "hmm"
+            # Re-map: if category == stem, output is voicedir/<stem>.*
+            if clip["category"] in ("hmm", "deflate"):
+                dest_base = out_dir / voice_dirname / clip["stem"]
 
             skip, existing = should_skip(dest_base, args.force)
             if skip:
