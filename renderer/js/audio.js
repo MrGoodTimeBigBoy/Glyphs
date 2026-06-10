@@ -307,6 +307,20 @@
     );
   }
 
+  /* ── playHmm() — the thinking sound ──────────────────────────── */
+  /*
+     Phase 5 hide world (hider mode): the machine "hmm"s while it
+     theatrically searches. Same machinery as playLetterName.
+  */
+  function playHmm() {
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('hmm', ''), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
+  }
+
   /* ── playDeflate() — junk-input deflate clip ─────────────────── */
   /*
      Phase 3 hub: junk input gets a small "pfff". Goes through the same
@@ -338,6 +352,7 @@
       window.Glyphs.audio.play           = play;
       window.Glyphs.audio.playDeflate    = playDeflate;
       window.Glyphs.audio.playLetterName = playLetterName;
+      window.Glyphs.audio.playHmm        = playHmm;
 
       /* Seed the current-voice index to point at the manifest primary. */
       var v = voices();

@@ -2,9 +2,9 @@
    Registers as window.Glyphs.state.
 
    States: 'hub' | 'hide' | 'draw' | 'find'. The hub registers itself
-   (hub.js), as does the find world (find.js); the remaining worlds are
-   STUBS owned by this file — a centered dim line "would enter <name>
-   world" replacing the hub view.
+   (hub.js), and each world registers itself from its own module
+   (find.js, hide.js, draw.js). STUB_WORLDS remains as the mechanism
+   for any future world that hasn't been built yet.
 
    Keyboard ownership: ONE document-level keydown listener lives here and
    routes every key. ESC is handled HERE and nowhere else — in a world it
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var STUB_WORLDS = ['hide', 'draw'];
+  var STUB_WORLDS = [];
 
   /* ── State ────────────────────────────────────────────────────── */
   var _current = 'hub';

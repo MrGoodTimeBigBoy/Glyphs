@@ -24,13 +24,15 @@
       <div class="find-catchline" id="find-catchline"></div>
       <div class="find-slots" id="find-slots"></div>
     </div>
+    <div class="hide" id="hide" hidden></div>
+    <div class="draw" id="draw" hidden></div>
     <div class="flourish-layer" id="flourish-layer" aria-hidden="true"></div>
   </div>
 
   <!--
-    Script load order per PHASE3-PLAN.md Part B (+ find, Phase 4):
+    Script load order per PHASE3-PLAN.md Part B (+ worlds, Phases 4–5):
       namespace → containment → pointer → audio/manifest → audio →
-      state → crt → flourish → persist → hub → find → boot
+      state → crt → flourish → persist → hub → find → hide → draw → boot
 
     audio/manifest.js is GENERATED — the hub works with whatever word set
     it lists (audio.js falls back to safe defaults if it is absent).
@@ -46,6 +48,8 @@
   <script src="js/persist.js"></script>
   <script src="js/hub.js"></script>
   <script src="js/find.js"></script>
+  <script src="js/hide.js"></script>
+  <script src="js/draw.js"></script>
   <script src="js/boot.js"></script>
 </body>
 </html>
