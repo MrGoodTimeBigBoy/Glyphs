@@ -154,6 +154,7 @@ Not committed. Possible directions:
 
 - `draw` world (turtle/Logo mode with color palette)
 - `find` world (falling-letter sight-word catcher)
+- `say` world (Simon Says spelling — machine spells, child types back, letter tones throughout; whether it leapfrogs `draw` or `find` is Ian's call based on what Kieran is engaged with; requires Phase 2 audio including the letter-tone synth and Phase 3 hub keyword routing)
 - Additional decorated words
 - Pixel art replacing some ASCII flourishes
 - A second child profile if this turns out to be useful

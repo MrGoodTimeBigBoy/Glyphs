@@ -64,6 +64,14 @@ The audio approach is the project's biggest unknown. Before building the hub, th
 
 A small set of words (8–12 for v1) trigger ASCII or pixel-art flourishes in addition to being read aloud. These are not advertised. The child finds them by typing. Suggested starters: `cat`, `dog`, `sun`, `moon`, `tree`, `star`, `rain`, `fish`, `bird`, `mom`, `dad`. The decorated word set is meant to grow — adding new ones is an easy ongoing project, not a one-time scope decision.
 
+### Letter tones
+
+Every letter has a fixed musical tone, assigned once and used consistently across the entire app. The same tone for `c` plays when the hub sounds out `cat`, when the child presses `c` in `draw`, and when the machine spells a word containing `c` in `say`. This is the concrete implementation of the "every key has a personality" principle from the design philosophy — tone is part of what makes each letter a *distinct thing* rather than an interchangeable input.
+
+Tones are drawn from a major scale spanning a couple of octaves, one pitch per letter. The five vowels (A, E, I, O, U) sit at chord-tone scale degrees — root, third, fifth — so they ring with a clarity that stands them apart from the consonants. Words thereby become small melodies; the melodic pattern of a familiar word becomes another route to recognizing it.
+
+This is a small synth engine, not a pre-rendered asset — a few oscillators via the Web Audio API, held in a single shared module. Whether vowels also get a different timbre (fuller sine wave against triangle-wave consonants, say) is an open implementation call worth trying.
+
 ## Worlds
 
 ### `hide`
@@ -106,6 +114,22 @@ When all slots are filled, the word animates (it pulses, glows, or briefly trans
 
 **Difficulty progression.** Start with two-letter words, expand to three and four. Reuse sight words and decorated words from the hub vocabulary so the worlds reinforce each other. Distractor letters (letters not in the current word) appear in later levels; pressing their keys does nothing or produces a tiny dud sound.
 
+### `say`
+
+Simon Says for spelling. The machine spells a word at the child: each letter glows in sequence, large across the screen, and plays its musical tone. Then it's his turn — he types the word back, one letter at a time. Each correctly typed letter glows again and plays its tone, a quiet echo confirming the sequence is rebuilding. A wrong key plays a soft buzz and resets the sequence to the first letter of the current word — not a loss, just start that word again.
+
+When all letters are in, the full word glows brightly, the machine pronounces it aloud using the same pre-rendered clip the hub uses, and a new word appears.
+
+**The musical layer.** Every letter has a consistent musical tone, assigned once and used everywhere (see Audio — Letter tones). During the show phase, the machine spells words as small melodies; during the input phase, typing each letter replays its tone. The musical consistency is what makes `say` work: a sufficiently engaged player starts to *hear* spelling — the melody of `cat` becomes as familiar as its shape.
+
+**Visual treatment.** The word displays as large glowing letters across the screen with generous spacing between them. During the show phase, letters glow in sequence and then dim. During the input phase, letters remain dim until correctly typed, lighting up one by one with their tones. On completion the full word glows brightly before clearing for the next.
+
+**Progression.** Words begin at one letter (`a`, `i`) and climb: two-letter sight words (`it`, `on`, `to`, `my`, `we`), then three-letter CVC words (`cat`, `dog`, `sun`), extending through the full curated list. When the cycle tops out it resets — each pass is a *wave*, each wave showing the words at a slightly faster pace. Only the show phase accelerates; input pacing stays comfortable throughout. No game over, no score.
+
+**Word source.** A curated subset of the same audio bundle the hub uses. Phonetically regular CVC words come first; sight words with irregular spellings layer in as the child grows comfortable with the mechanic. Every word in `say` is a word the hub can speak.
+
+**Reserved keys.** ESC returns to the hub. That's it. During the show phase, key presses produce at most a tiny visual ping — they don't interrupt the show or advance the sequence. During the input phase, the wrong key triggers the buzz and restart; the right key advances the sequence.
+
 ## Cross-world conventions
 
 - **ESC** always returns to the hub. Single press, no hold or combo.
@@ -136,6 +160,7 @@ The following were considered and explicitly cut:
 - **Settings menu, parent controls, profiles.** One child, one machine, one experience.
 - **Real Logo grammar in `draw`.** Too much vocabulary for a kindergartener. Letter-by-letter associative response wins.
 - **Word-based interactions inside worlds.** Inside worlds, the unit is the letter. Words live in the hub.
+  (`find` and `say` put a word on screen as the target, but the input unit is still the letter — the rule bars hub-style word *entry* inside worlds, and stands.)
 
 ## Open questions
 
