@@ -95,14 +95,12 @@ Plain scripts, no bundler, no ES modules (file:// + sandboxed renderer friendly)
 
 ```js
 // renderer/js/<name>.js
-window.Glyphs = window.Glyphs || {};
-// namespace.js defines Glyphs.register / Glyphs.boot
-Glyphs.register('<name>', {
+window.Glyphs.register('<name>', {
   init() { /* wire up listeners */ },
 });
 ```
 
-`index.html` script order: `namespace.js`, then modules (`containment.js`, `pointer.js`), then `boot.js`. Adding a module = new file with `Glyphs.register(...)` + one `<script>` tag before `boot.js`.
+`index.html` script order: `namespace.js` (defines `window.Glyphs` with `register`/`boot`), then modules (`containment.js`, `pointer.js`), then `boot.js`. The enforced load order **is** the guard — module files call `window.Glyphs.register` directly, with no per-file `window.Glyphs = window.Glyphs || {}` boilerplate (a module without `namespace.js` loaded first is a hard error either way, and the boilerplate would only mask it). Adding a module = new file with `window.Glyphs.register(...)` + one `<script>` tag before `boot.js`.
 
 ## Mode matrix
 
