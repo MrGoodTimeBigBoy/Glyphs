@@ -57,3 +57,90 @@ body.pointer-hidden * {
   box-shadow: 0 0 6px #33ff33;
   animation: blink 1.06s step-end infinite;
 }
+
+/* ── Phase 2 audio test harness ─────────────────────────────────── */
+/* test-audio.html only. Phosphor green, monospace, calm.           */
+
+.audio-harness {
+  font-family: monospace;
+  font-size: 20px;
+  color: #33ff33;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9em;
+  padding: 2em 3em;
+  max-width: 680px;
+  width: 100%;
+}
+
+.harness-hint {
+  font-size: 0.72em;
+  color: #1a8f1a;           /* dim — a muted phosphor green */
+  letter-spacing: 0.04em;
+}
+
+.harness-voice {
+  font-size: 0.82em;
+  color: #26cc26;
+  cursor: pointer;          /* clicking also cycles the voice */
+}
+
+.harness-voice span {
+  color: #33ff33;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.harness-status {
+  font-size: 1em;
+  color: #29e029;
+  min-height: 1.4em;
+  letter-spacing: 0.02em;
+}
+
+.harness-input {
+  display: flex;
+  align-items: center;
+  font-size: 1.15em;
+  color: #33ff33;
+  /* The .cursor inside inherits the harness font-size via em base override */
+}
+
+/* Override the cursor em base for the harness — smaller than the   */
+/* full-screen centred cursor in index.html.                        */
+.harness-input .cursor {
+  font-size: 20px;
+  display: inline-block;
+  vertical-align: text-bottom;
+  /* nudge the block to sit flush with the text baseline */
+  margin-left: 1px;
+}
+
+.harness-history {
+  font-size: 0.75em;
+  color: #1a8f1a;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  min-height: 4em;
+}
+
+.harness-history .h-entry {
+  display: flex;
+  gap: 1.2em;
+}
+
+.harness-history .h-word {
+  color: #26cc26;
+  min-width: 8ch;
+}
+
+.harness-history .h-result {
+  color: #1a8f1a;
+}
+
+/* Letter highlight during sound-out */
+.harness-status .lit {
+  color: #33ff33;
+  text-shadow: 0 0 8px #33ff33;
+}
