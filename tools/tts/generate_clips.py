@@ -2,41 +2,39 @@
 """
 generate_clips.py — Glyphs Phase 2 TTS clip generator.
 
-Generates short speech clips and writes them under renderer/audio/ plus a
-generated renderer/audio/manifest.js.
+Generates short speech clips with Google Gemini Flash TTS and writes them
+under renderer/audio/ plus a generated renderer/audio/manifest.js.
 
-Two API backends (--api):
+Two API backends (--api), same model family and the same voices
+(Sulafat / Aoede / Callirrhoe) on both:
 
-  openrouter  POST https://openrouter.ai/api/v1/chat/completions
-              Audio output on OpenRouter REQUIRES stream:true (verified
-              2026-06-10: non-streaming requests are rejected with
-              "Audio output requires stream: true"). Audio arrives as
-              base64 PCM chunks in choices[0].delta.audio.data.
-              NOTE: OpenRouter routes NO Gemini TTS model (verified
-              2026-06-10 against GET /api/v1/models — every google/gemini-*
-              model is text/image-only). The only speech-capable models
-              there are openai/gpt-audio and openai/gpt-audio-mini, so this
-              backend uses OpenAI voices.
+  openrouter  POST https://openrouter.ai/api/v1/audio/speech
+              The plan-of-record route. NOTE (verified 2026-06-10): TTS
+              models are served by this dedicated OpenAI-TTS-shaped
+              endpoint and are HIDDEN from the public GET /api/v1/models
+              list (their output modality is "speech"); chat/completions
+              rejects them. Confirm a TTS model id via
+              GET /api/v1/models/{id}/endpoints (or --list-models here).
+              Response is raw PCM (rate/channels in the Content-Type
+              header) or MP3; we request PCM and wrap it into WAV.
 
   gemini      POST https://generativelanguage.googleapis.com/v1beta/
                    models/{model}:generateContent
-              Google's Gemini API direct — the route that preserves the
-              originally chosen Gemini voices (Sulafat / Aoede / Callirrhoe).
-              Requires GEMINI_API_KEY (or GOOGLE_API_KEY).
+              Google's Gemini API direct — the documented fallback should
+              the OpenRouter route disappear. Requires GEMINI_API_KEY
+              (or GOOGLE_API_KEY).
 
 Standard library only: no pip install required.
 Runs unchanged on macOS and Linux.
 
 Usage:
     python3 tools/tts/generate_clips.py --probe
-    python3 tools/tts/generate_clips.py --api gemini --probe
     python3 tools/tts/generate_clips.py --list-models
     python3 tools/tts/generate_clips.py
-    python3 tools/tts/generate_clips.py --api gemini
     python3 tools/tts/generate_clips.py --force
     python3 tools/tts/generate_clips.py --primary-only
-    python3 tools/tts/generate_clips.py --model openai/gpt-audio-mini
-    python3 tools/tts/generate_clips.py --api gemini --voices sulafat --force
+    python3 tools/tts/generate_clips.py --voices sulafat --force
+    python3 tools/tts/generate_clips.py --api gemini --probe
 """
 
 import argparse
@@ -53,44 +51,46 @@ import urllib.request
 import wave
 
 # ---------------------------------------------------------------------------
-# API / model / voice configuration
+# API / model configuration
 # ---------------------------------------------------------------------------
 
-# Per-backend defaults. Voice dicts map directory name (lowercase, used in
-# renderer/audio/<voice>/...) to the API voice string sent in the request.
-# If the API rejects a voice name, this is the single place to fix it.
-#
-# The Gemini default model ID is a best guess; confirm with:
-#     python3 tools/tts/generate_clips.py --api gemini --list-models
-# and override via --model or the env var named below if it has moved on.
 API_CONFIGS = {
     "openrouter": {
-        "default_model": "openai/gpt-audio",
+        # Confirmed live 2026-06-10 (provider: Google Vertex) via
+        # /api/v1/models/google/gemini-3.1-flash-tts-preview/endpoints.
+        "default_model": "google/gemini-3.1-flash-tts-preview",
         "model_env":     "OPENROUTER_TTS_MODEL",
         "key_env":       ["OPENROUTER_API_KEY"],
-        "primary":       "cedar",
-        "bakeoff":       ["marin", "coral"],
-        "voices": {
-            "cedar": "cedar",
-            "marin": "marin",
-            "coral": "coral",
-        },
     },
     "gemini": {
+        # Best guess for the direct-API id; confirm with
+        #     python3 tools/tts/generate_clips.py --api gemini --list-models
+        # and override via --model or the env var if it has moved on.
         "default_model": "gemini-2.5-flash-preview-tts",
         "model_env":     "GEMINI_TTS_MODEL",
         "key_env":       ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-        "primary":       "sulafat",
-        "bakeoff":       ["aoede", "callirrhoe"],
-        "voices": {
-            "sulafat":    "Sulafat",
-            "aoede":      "Aoede",
-            "callirrhoe": "Callirrhoe",
-        },
     },
 }
 
 DEFAULT_API = "openrouter"
+
+# ---------------------------------------------------------------------------
+# Voice configuration (shared by both backends — Gemini prebuilt voices)
+# ---------------------------------------------------------------------------
+
+# Primary voice used for the full word set.
+PRIMARY_VOICE = "sulafat"
+
+# Bake-off voices get only the subset below.
+BAKEOFF_VOICES = ["aoede", "callirrhoe"]
+
+# Map from directory name (lowercase) to the API voice string sent in the
+# request body. All three verified accepted with this casing (2026-06-10).
+VOICES = {
+    "sulafat":     "Sulafat",
+    "aoede":       "Aoede",
+    "callirrhoe":  "Callirrhoe",
+}
 
 # Words and special tokens that make up the bake-off subset.
 BAKEOFF_WORDS = ["cat", "sun", "apple", "the", "run"]
@@ -108,7 +108,11 @@ STYLE = (
 )
 
 # Specialised prompts for each content type.
-PROMPT_WORD = STYLE  # + " " + word
+# The word is QUOTED in the prompt. Bare short/function words after the
+# colon make the model return empty audio ("and", "go", "me", …) or read
+# the instruction itself aloud for ~20s ("the") — verified 2026-06-10;
+# quoting pins the content and fixed every case.
+PROMPT_WORD = STYLE  # + ' "' + word + '"'
 
 PROMPT_PHONEMIC = (
     "Say only this letter sound, clearly and warmly, the way you sound out "
@@ -150,11 +154,11 @@ LETTER_NAME_MAP = {
 # API constants
 # ---------------------------------------------------------------------------
 
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-OPENROUTER_CHAT = f"{OPENROUTER_BASE}/chat/completions"
+OPENROUTER_BASE   = "https://openrouter.ai/api/v1"
+OPENROUTER_SPEECH = f"{OPENROUTER_BASE}/audio/speech"
 OPENROUTER_MODELS = f"{OPENROUTER_BASE}/models"
-HTTP_REFERER    = "https://glyphs.local"
-APP_TITLE       = "Glyphs"
+HTTP_REFERER      = "https://glyphs.local"
+APP_TITLE         = "Glyphs"
 
 GEMINI_BASE   = "https://generativelanguage.googleapis.com/v1beta"
 GEMINI_MODELS = f"{GEMINI_BASE}/models"
@@ -217,15 +221,16 @@ def pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000,
         wf.writeframes(pcm_bytes)
     return buf.getvalue()
 
-def finalize_audio(raw: bytes, sample_rate: int = 24000) -> tuple[bytes, str]:
+def finalize_audio(raw: bytes, sample_rate: int = 24000,
+                   channels: int = 1) -> tuple[bytes, str]:
     """Turn raw API audio bytes into writable file bytes + extension.
 
     Container formats (detected by magic bytes) pass through verbatim;
-    bare PCM is wrapped in a WAV header at the given sample rate.
+    bare PCM is wrapped in a WAV header at the given rate/channels.
     """
     ext, is_container = detect_audio_format(raw)
     if not is_container:
-        return pcm_to_wav(raw, sample_rate=sample_rate), "wav"
+        return pcm_to_wav(raw, sample_rate=sample_rate, channels=channels), "wav"
     return raw, ext
 
 # ---------------------------------------------------------------------------
@@ -274,20 +279,22 @@ def http_with_retry(make_request, consume):
     )
 
 # ---------------------------------------------------------------------------
-# OpenRouter backend (streaming — audio output requires stream:true)
+# OpenRouter backend — dedicated TTS endpoint /api/v1/audio/speech
 # ---------------------------------------------------------------------------
 
 def openrouter_request(text: str, voice_api: str, model: str,
                        api_key: str) -> urllib.request.Request:
-    """Build the streaming chat-completions request for OpenRouter."""
+    """Build the audio/speech request for OpenRouter.
+
+    The endpoint accepts response_format "mp3" or "pcm" only; we take PCM
+    and wrap it into WAV ourselves (rate/channels come back in the
+    Content-Type header, e.g. "audio/pcm;rate=24000;channels=1").
+    """
     payload = {
         "model": model,
-        "modalities": ["text", "audio"],
-        # Streaming audio is delivered as raw PCM chunks; "wav" is not
-        # accepted in streaming mode. We wrap PCM → WAV ourselves.
-        "audio": {"voice": voice_api, "format": "pcm16"},
-        "stream": True,
-        "messages": [{"role": "user", "content": text}],
+        "input": text,
+        "voice": voice_api,
+        "response_format": "pcm",
     }
     headers = {
         "Authorization":  f"Bearer {api_key}",
@@ -295,60 +302,35 @@ def openrouter_request(text: str, voice_api: str, model: str,
         "HTTP-Referer":   HTTP_REFERER,
         "X-Title":        APP_TITLE,
     }
-    return urllib.request.Request(OPENROUTER_CHAT,
+    return urllib.request.Request(OPENROUTER_SPEECH,
                                   data=json.dumps(payload).encode("utf-8"),
                                   headers=headers, method="POST")
 
-def collect_openrouter_stream(resp) -> tuple[bytes, dict]:
-    """Read an OpenRouter SSE stream; return (audio_bytes, diagnostics).
+def parse_pcm_content_type(content_type: str) -> tuple[int, int]:
+    """Extract (sample_rate, channels) from an audio Content-Type header.
 
-    Audio arrives base64-encoded in choices[0].delta.audio.data across many
-    events. Diagnostics carry the delta/audio keys seen and the transcript,
-    so a contract change is identifiable from probe output alone.
+    Defaults to (24000, 1) when the header carries no parameters.
     """
-    chunks: list[bytes] = []
-    diag = {"events": 0, "delta_keys": set(), "audio_keys": set(),
-            "transcript": []}
-    for line in resp:
-        line = line.decode("utf-8", errors="replace").strip()
-        if not line.startswith("data: "):
-            continue   # ignore SSE comments / keep-alives
-        data = line[len("data: "):]
-        if data == "[DONE]":
-            break
-        try:
-            obj = json.loads(data)
-        except json.JSONDecodeError:
-            continue
-        diag["events"] += 1
-        delta = (obj.get("choices") or [{}])[0].get("delta", {})
-        diag["delta_keys"].update(delta.keys())
-        audio = delta.get("audio")
-        if isinstance(audio, dict):
-            diag["audio_keys"].update(audio.keys())
-            if audio.get("data"):
-                chunks.append(base64.b64decode(audio["data"]))
-            if audio.get("transcript"):
-                diag["transcript"].append(audio["transcript"])
-    return b"".join(chunks), diag
+    rate_match = re.search(r"rate=(\d+)", content_type or "")
+    chan_match = re.search(r"channels=(\d+)", content_type or "")
+    rate = int(rate_match.group(1)) if rate_match else 24000
+    channels = int(chan_match.group(1)) if chan_match else 1
+    return rate, channels
 
 def call_tts_openrouter(text: str, voice_api: str, model: str,
                         api_key: str) -> tuple[bytes, str]:
     """Generate one clip via OpenRouter; return (file_bytes, extension)."""
-    raw, diag = http_with_retry(
+    raw, content_type = http_with_retry(
         lambda: openrouter_request(text, voice_api, model, api_key),
-        collect_openrouter_stream,
+        lambda resp: (resp.read(), resp.headers.get("Content-Type", "")),
     )
     if not raw:
         raise RuntimeError(
-            "OpenRouter stream contained no audio data.\n"
-            f"  SSE events parsed:   {diag['events']}\n"
-            f"  delta keys seen:     {sorted(diag['delta_keys'])}\n"
-            f"  delta.audio keys:    {sorted(diag['audio_keys'])}\n"
-            "  Inspect with --probe and update collect_openrouter_stream() "
-            "if the response shape has changed."
+            f"OpenRouter audio/speech returned an empty body "
+            f"(Content-Type: {content_type!r})."
         )
-    return finalize_audio(raw)
+    rate, channels = parse_pcm_content_type(content_type)
+    return finalize_audio(raw, sample_rate=rate, channels=channels)
 
 # ---------------------------------------------------------------------------
 # Gemini-direct backend (generativelanguage.googleapis.com)
@@ -456,23 +438,41 @@ def resolve_api_key(api: str) -> str:
 # Model listing (--list-models)
 # ---------------------------------------------------------------------------
 
-def list_models(api: str, api_key: str | None) -> None:
-    """Print the models relevant to TTS for the selected backend."""
+def list_models(api: str, api_key: str | None, model: str) -> None:
+    """Print TTS-model availability for the selected backend."""
     if api == "openrouter":
-        # Public endpoint, no key required.
+        # TTS ("speech"-output) models are hidden from the public models
+        # list, so check the configured model's endpoints directly.
+        # Both endpoints are public — no key required.
+        req = urllib.request.Request(f"{OPENROUTER_MODELS}/{model}/endpoints")
+        print(f"[models] endpoint check for {model!r}:")
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read()).get("data", {})
+            arch = data.get("architecture") or {}
+            print(f"  name:      {data.get('name')}")
+            print(f"  modality:  {arch.get('modality')}")
+            for ep in data.get("endpoints", []):
+                print(f"  endpoint:  provider={ep.get('provider_name')}  "
+                      f"status={ep.get('status')}  "
+                      f"uptime_1d={ep.get('uptime_last_1d')}")
+            if not data.get("endpoints"):
+                print("  NO ENDPOINTS — the model is not currently routable.")
+        except urllib.error.HTTPError as exc:
+            print(f"  HTTP {exc.code} — unknown model id?")
+
         req = urllib.request.Request(OPENROUTER_MODELS)
         with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read())
-        models = data.get("data", [])
-        print(f"[models] OpenRouter lists {len(models)} models; "
-              f"those with audio output:")
+            models = json.loads(resp.read()).get("data", [])
+        print(f"\n[models] public list ({len(models)} models) — audio-output "
+              f"and tts-named entries (NOTE: dedicated TTS models usually "
+              f"do NOT appear here):")
         found = False
         for m in models:
             arch = m.get("architecture") or {}
-            if "audio" in (arch.get("output_modalities") or []):
-                print(f"  {m.get('id')}  "
-                      f"in={arch.get('input_modalities')}  "
-                      f"out={arch.get('output_modalities')}")
+            if ("audio" in (arch.get("output_modalities") or [])
+                    or "tts" in m.get("id", "").lower()):
+                print(f"  {m.get('id')}  out={arch.get('output_modalities')}")
                 found = True
         if not found:
             print("  (none)")
@@ -503,34 +503,39 @@ def list_models(api: str, api_key: str | None) -> None:
 def run_probe(api: str, model: str, api_key: str, out_dir: pathlib.Path,
               voice_dirname: str, voice_api: str) -> None:
     """Generate ONE clip ('cat', primary voice) and print diagnostic info."""
-    prompt = f"{PROMPT_WORD} cat"
+    prompt = f'{PROMPT_WORD} "cat"'
     print(f"\n[probe] api={api}  model={model!r}  voice_dir={voice_dirname!r}"
           f"  voice_api={voice_api!r}")
     print(f"[probe] prompt: {prompt!r}")
 
     if api == "openrouter":
-        print(f"[probe] calling {OPENROUTER_CHAT} (streaming) …")
+        print(f"[probe] calling {OPENROUTER_SPEECH} …")
         try:
             with urllib.request.urlopen(
                 openrouter_request(prompt, voice_api, model, api_key),
                 timeout=120,
             ) as resp:
-                raw, diag = collect_openrouter_stream(resp)
+                raw = resp.read()
+                content_type = resp.headers.get("Content-Type", "")
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
             print(f"[probe] HTTP {exc.code} error:\n{err_body}", file=sys.stderr)
             sys.exit(1)
-        print(f"\n[probe] SSE events parsed: {diag['events']}")
-        print(f"[probe] delta keys seen:   {sorted(diag['delta_keys'])}")
-        print(f"[probe] delta.audio keys:  {sorted(diag['audio_keys'])}")
-        print(f"[probe] transcript:        {''.join(diag['transcript'])!r}")
+        print(f"\n[probe] Content-Type: {content_type}")
+        print(f"[probe] body: {len(raw)} bytes, magic={raw[:4]!r}")
         if not raw:
-            print("\n[probe] No audio data in stream — see keys above.",
+            print("\n[probe] Empty body — inspect the headers above.",
                   file=sys.stderr)
             sys.exit(1)
-        audio_bytes, ext = finalize_audio(raw)
-        print(f"[probe] audio: {len(raw)} raw bytes → .{ext} "
-              f"({len(audio_bytes)} bytes)")
+        rate, channels = parse_pcm_content_type(content_type)
+        audio_bytes, ext = finalize_audio(raw, sample_rate=rate,
+                                          channels=channels)
+        if ext == "wav" and raw[:4] != MAGIC_RIFF:
+            secs = len(raw) / (rate * channels * 2)
+            print(f"[probe] raw PCM {rate} Hz ×{channels}ch → WAV, "
+                  f"{secs:.2f}s ({len(audio_bytes)} bytes)")
+        else:
+            print(f"[probe] container format .{ext} ({len(audio_bytes)} bytes)")
     else:
         url = f"{GEMINI_BASE}/models/{model}:generateContent"
         print(f"[probe] calling {url} …")
@@ -610,7 +615,7 @@ def clips_for_voice(words: list[str], voice_dirname: str,
         clips.append({
             "category": "words",
             "stem": word,
-            "prompt": f"{PROMPT_WORD} {word}",
+            "prompt": f'{PROMPT_WORD} "{word}"',
         })
 
     # Letters — phonemic sounds
@@ -650,7 +655,6 @@ def clips_for_voice(words: list[str], voice_dirname: str,
 # ---------------------------------------------------------------------------
 
 def write_manifest(out_dir: pathlib.Path,
-                   primary_voice: str,
                    voices_used: list[str],
                    words_generated: list[str],
                    ext_used: str) -> None:
@@ -667,7 +671,7 @@ def write_manifest(out_dir: pathlib.Path,
 window.Glyphs = window.Glyphs || {{}};
 window.Glyphs.audio = window.Glyphs.audio || {{}};
 window.Glyphs.audio.manifest = {{
-  primary: {json.dumps(primary_voice)},
+  primary: {json.dumps(PRIMARY_VOICE)},
   voices: {voices_js},
   ext: {json.dumps(ext_used)},
   words: {words_js},
@@ -687,8 +691,8 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         prog="generate_clips.py",
         description=(
-            "Generate TTS audio clips for Glyphs via OpenRouter "
-            "(openai/gpt-audio, streaming) or the Gemini API direct. "
+            "Generate TTS audio clips for Glyphs with Google Gemini Flash "
+            "TTS, via OpenRouter (default) or the Gemini API direct. "
             "Reads the API key from the environment (see --api)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -696,30 +700,30 @@ def parse_args(argv=None):
 Examples:
   # Confirm the API contract (generates one 'cat' clip, prints diagnostics):
   python3 tools/tts/generate_clips.py --probe
-  python3 tools/tts/generate_clips.py --api gemini --probe
 
-  # See which models the backend can serve:
+  # Check the model is routable / list TTS models:
   python3 tools/tts/generate_clips.py --list-models
-  python3 tools/tts/generate_clips.py --api gemini --list-models
 
   # Full run (all voices, all clips):
   python3 tools/tts/generate_clips.py
-  python3 tools/tts/generate_clips.py --api gemini
 
   # Re-render everything for one voice only:
-  python3 tools/tts/generate_clips.py --api gemini --voices sulafat --force
+  python3 tools/tts/generate_clips.py --voices sulafat --force
 
   # Primary voice only, skip bake-off voices:
   python3 tools/tts/generate_clips.py --primary-only
+
+  # The Gemini-direct fallback (needs GEMINI_API_KEY):
+  python3 tools/tts/generate_clips.py --api gemini --probe
         """,
     )
     parser.add_argument(
         "--api", choices=sorted(API_CONFIGS.keys()), default=DEFAULT_API,
         help=(
-            "TTS backend: 'openrouter' (openai/gpt-audio via OpenRouter, "
-            "needs OPENROUTER_API_KEY) or 'gemini' (Google Gemini API "
-            "direct, needs GEMINI_API_KEY; preserves the Sulafat/Aoede/"
-            f"Callirrhoe voice plan). Default: {DEFAULT_API!r}."
+            "TTS backend: 'openrouter' (plan of record, needs "
+            "OPENROUTER_API_KEY) or 'gemini' (Google Gemini API direct "
+            "fallback, needs GEMINI_API_KEY). Same voices either way. "
+            f"Default: {DEFAULT_API!r}."
         ),
     )
     parser.add_argument(
@@ -732,7 +736,7 @@ Examples:
     )
     parser.add_argument(
         "--list-models", action="store_true",
-        help="List the backend's TTS-relevant models and exit.",
+        help="Check/list the backend's TTS models and exit.",
     )
     parser.add_argument(
         "--force", action="store_true",
@@ -749,7 +753,7 @@ Examples:
         "--voices", default=None,
         help=(
             "Comma-separated list of voice directory names to generate "
-            "(e.g. sulafat,aoede). Default: all of the backend's voices."
+            "(e.g. sulafat,aoede). Default: all configured voices."
         ),
     )
     parser.add_argument(
@@ -794,11 +798,11 @@ def main(argv=None):
     )
 
     # ------------------------------------------------------------------
-    # Model listing (OpenRouter's list is public; Gemini's needs the key)
+    # Model listing (OpenRouter's endpoints are public; Gemini needs the key)
     # ------------------------------------------------------------------
     if args.list_models:
         api_key = resolve_api_key(api) if api == "gemini" else None
-        list_models(api, api_key)
+        list_models(api, api_key, model)
         return
 
     # ------------------------------------------------------------------
@@ -839,23 +843,19 @@ def main(argv=None):
     # ------------------------------------------------------------------
     # Resolve voices to generate
     # ------------------------------------------------------------------
-    voices_map    = config["voices"]
-    primary_voice = config["primary"]
-    bakeoff_voices = config["bakeoff"]
-
     if args.voices:
         requested_voices = [v.strip().lower() for v in args.voices.split(",")]
     elif args.primary_only:
-        requested_voices = [primary_voice]
+        requested_voices = [PRIMARY_VOICE]
     else:
-        requested_voices = [primary_voice] + bakeoff_voices
+        requested_voices = [PRIMARY_VOICE] + BAKEOFF_VOICES
 
     # Validate voices.
-    unknown = [v for v in requested_voices if v not in voices_map]
+    unknown = [v for v in requested_voices if v not in VOICES]
     if unknown:
         print(
-            f"ERROR: unknown voice(s) for --api {api}: {unknown}. "
-            f"Configured voices: {list(voices_map.keys())}",
+            f"ERROR: unknown voice(s): {unknown}. "
+            f"Configured voices: {list(VOICES.keys())}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -868,8 +868,8 @@ def main(argv=None):
         print(f"[probe] model: {model}")
         print(f"[probe] out_dir: {out_dir}")
         run_probe(api, model, api_key, out_dir,
-                  voice_dirname=primary_voice,
-                  voice_api=voices_map[primary_voice])
+                  voice_dirname=PRIMARY_VOICE,
+                  voice_api=VOICES[PRIMARY_VOICE])
         print("\n[probe] Done. Inspect the output above, then run without "
               "--probe for the full clip set.")
         return
@@ -892,7 +892,7 @@ def main(argv=None):
     ext_seen: set[str] = set()
 
     for voice_dirname in requested_voices:
-        is_bakeoff = (voice_dirname != primary_voice) and (voice_dirname in bakeoff_voices)
+        is_bakeoff = (voice_dirname != PRIMARY_VOICE) and (voice_dirname in BAKEOFF_VOICES)
         clips = clips_for_voice(raw_words, voice_dirname, is_bakeoff)
 
         print(f"\n── Voice: {voice_dirname} ({'bake-off subset' if is_bakeoff else 'full set'}) "
@@ -921,11 +921,11 @@ def main(argv=None):
                 counts["skip"] += 1
                 print(f"  [skip]  {dest_base.relative_to(out_dir)}.{ext}")
                 # Still record generated words.
-                if clip["category"] == "words" and voice_dirname == primary_voice:
+                if clip["category"] == "words" and voice_dirname == PRIMARY_VOICE:
                     primary_words_generated.append(clip["stem"])
                 continue
 
-            voice_api = voices_map[voice_dirname]
+            voice_api = VOICES[voice_dirname]
             try:
                 audio_bytes, ext = call_tts_api(
                     api, clip["prompt"], voice_api, model, api_key
@@ -948,7 +948,7 @@ def main(argv=None):
             counts["bytes"] += n
             ext_seen.add(ext)
 
-            if clip["category"] == "words" and voice_dirname == primary_voice:
+            if clip["category"] == "words" and voice_dirname == PRIMARY_VOICE:
                 primary_words_generated.append(clip["stem"])
 
             time.sleep(INTER_CALL_SLEEP)
@@ -975,7 +975,7 @@ def main(argv=None):
     # ------------------------------------------------------------------
     # Write manifest (only if primary voice was in the run)
     # ------------------------------------------------------------------
-    if primary_voice in requested_voices:
+    if PRIMARY_VOICE in requested_voices:
         # Determine dominant extension (prefer wav).
         if "wav" in ext_seen:
             dominant_ext = "wav"
@@ -990,7 +990,6 @@ def main(argv=None):
 
         write_manifest(
             out_dir,
-            primary_voice=primary_voice,
             voices_used=requested_voices,
             words_generated=ordered_words,
             ext_used=dominant_ext,
