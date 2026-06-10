@@ -153,3 +153,19 @@ verified reachable) or generating on Ian's Mac.
    until clean.
 9. **Handoff (inline):** Ian's listening checklist (the manual gate); push to
    `claude/glyphs-phase2-audio-6qwps3`.
+
+-----
+
+## Gate result (2026-06-10)
+
+**PASSED — Ian signed off after two listening rounds.** Phase 3 may start.
+
+- **Voice:** Callirrhoe (bake-off winner; Sulafat/Aoede kept at subset size
+  for A/B during delivery iteration).
+- **Round-2 adjustments accepted:** per-word delivery hints (`WORD_STYLES`
+  in `generate_clips.py` — animals more active, function words plain),
+  phonemic "r" respelled `rrr`, 40 ms tail fade + 80 ms silence pad on every
+  clip, renderer `LETTER_GAP_MS` 120 → 100.
+- **Carried into Phase 3:** delivery hints may be re-tuned to match word
+  animations; the full ~600–800-clip bundle generation (ROADMAP Phase 3)
+  reuses this pipeline as-is.
