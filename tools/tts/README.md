@@ -30,7 +30,7 @@ no robot TTS voice anywhere in the experience.
 | **API (plan of record)** | OpenRouter — `POST https://openrouter.ai/api/v1/audio/speech` |
 | **Model** | `google/gemini-3.1-flash-tts-preview` (provider: Google Vertex; verified live 2026-06-10) |
 | **Key** | `OPENROUTER_API_KEY` |
-| **Primary voice** | **Callirrhoe** — chose at the 2026-06-10 listening gate; full word set + all letters (phonemic and name) + hmm |
+| **Primary voice** | **Callirrhoe** — chose at the 2026-06-10 listening gate; full word set + all letters (phonemic and name) + hmm + deflate |
 | **Comparison voices** | **Sulafat**, **Aoede** — bake-off subset kept for A/B while delivery is iterated |
 | **Output format** | WAV / PCM 24 kHz mono, 16-bit signed little-endian, tail-conditioned (see below) |
 
@@ -73,11 +73,21 @@ Every word clip uses the storyteller base style:
 > reading to a young child. *(optional per-word hint)* Natural and unhurried:
 > "*word*""
 
-The **per-word hints** live in `WORD_STYLES` in `generate_clips.py` — gate
-feedback was that one uniform delivery across all twenty words felt
-repetitive, and e.g. the animals wanted to be more active. Words without a
-hint get the plain storyteller read. To iterate on a delivery: edit the hint,
-then `python3 tools/tts/generate_clips.py --voices callirrhoe --force` (or
+Delivery hints come from two dicts in `generate_clips.py`, resolved in this
+order for each word:
+
+1. **`WORD_STYLES[word]`** — an individually tuned hint (gate feedback was
+   that one uniform delivery across all twenty words felt repetitive, and
+   e.g. the animals wanted to be more active). Always wins.
+2. **`CATEGORY_STYLES[category]`** — a category-level hint selected by the
+   word's optional category column in `wordlist.txt` (Phase 3 bundle:
+   action, animal, body, celestial, color, family, feeling, food, home,
+   magic, nature, number, place, vehicle, weather — one short sentence
+   each, written in the voice of the gate-accepted per-word hints).
+3. Neither → the plain storyteller read.
+
+To iterate on a delivery: edit the hint, then
+`python3 tools/tts/generate_clips.py --voices callirrhoe --force` (or
 delete just that word's WAV and re-run without `--force`).
 
 **The target word stays in double quotes.** This is load-bearing, not
@@ -92,6 +102,20 @@ only the **phonetic sound** (not the letter name). The spellings are data in
 (gate feedback). Wrong-sounding letters are fixed by adjusting the spelling
 there and re-rendering.
 
+### Interjections (hmm, deflate)
+
+Two non-word clips live directly under each voice directory (no `words/`
+subdirectory), generated through the same pipeline with their own prompts:
+
+- **`hmm.wav`** (`PROMPT_HMM`) — the soft, thoughtful "hmm" that prefixes
+  the letter sound-out for unknown words.
+- **`deflate.wav`** (`PROMPT_DEFLATE`, Phase 3) — a soft, breathy,
+  deflating "pfff" played when the child types junk. DESIGN.md says there
+  are no failure states, so it must sound gentle and amused, never harsh.
+
+Both render for the primary voice and the bake-off voices. The renderer
+hardcodes their paths; they are not listed in the manifest's `words`.
+
 ### Voice line-up (bake-off resolved)
 
 The 2026-06-10 listening gate picked **Callirrhoe** as the primary voice.
@@ -100,7 +124,7 @@ can still A/B warmth while delivery is iterated:
 
 - Words: `cat sun apple the run`
 - Phonemic letters: `c a t`
-- hmm
+- hmm, deflate
 
 Once delivery is settled they can be dropped entirely (delete their
 directories and remove them from `BAKEOFF_VOICES`, then re-run to refresh the
@@ -182,18 +206,56 @@ python3 tools/tts/generate_clips.py --api gemini --probe
 
 ---
 
+## The word list format
+
+`tools/tts/wordlist.txt` is the single source of truth for the word bundle.
+One entry per line, whitespace-separated, **append-only**:
+
+```
+# Lines starting with # and blank lines are ignored (section headers OK).
+the                # no category → plain storyteller read
+bear animal        # category → CATEGORY_STYLES["animal"] delivery hint
+```
+
+Token 0 is the word (file order = manifest order); the optional token 1
+names a `CATEGORY_STYLES` delivery category. A word's `WORD_STYLES` entry,
+if present, overrides its category hint either way.
+
 ## Adding more words
 
-1. Add the new word(s) to `tools/tts/wordlist.txt` (one word per line).
+1. Add the new word(s) to `tools/tts/wordlist.txt` (format above).
 2. Run the generator — it is **idempotent**: existing clips are skipped
    automatically. Only the new words are fetched from the API.
 
 ```sh
-echo "rainbow" >> tools/tts/wordlist.txt
+echo "rainbow color" >> tools/tts/wordlist.txt
 python3 tools/tts/generate_clips.py --primary-only
 ```
 
 The manifest is rewritten after each run to reflect what was actually produced.
+
+---
+
+## Verifying the clip tree
+
+`tools/tts/verify_clips.py` (stdlib only, like the generator) checks the
+generated tree against the word list and the format contract:
+
+```sh
+python3 tools/tts/verify_clips.py          # full check
+npm run verify-clips                       # same thing
+python3 tools/tts/verify_clips.py --quick  # skip the duration/tail scan
+```
+
+It verifies that every expected clip exists and is non-empty (primary
+voice: full word set + both letter sets + hmm + deflate; bake-off voices:
+their frozen subsets + hmm + deflate), that every WAV is 24 kHz / mono /
+16-bit with a duration of 0.2–6.0 s and a genuinely silent tail (catches
+the empty-audio, read-the-instructions-aloud, and missing-tail-conditioning
+failure modes), and that `manifest.js` matches the word list in order with
+no orphan files under `renderer/audio/`. Every failure prints on its own
+line plus a per-voice summary; the exit status is 0 only when fully clean.
+Run it after every generation pass and before committing clips.
 
 ---
 
@@ -224,16 +286,18 @@ renderer/audio/
     words/
       the.wav
       and.wav
-      … (all 20 words)
+      … (every wordlist.txt word)
     letters-phonemic/
       a.wav  b.wav  … z.wav       # phonetic sounds ("ah", "buh", …)
     letters-name/
       a.wav  b.wav  … z.wav       # letter names ("ay", "bee", …)
     hmm.wav
+    deflate.wav
   sulafat/                        # comparison voice, subset only
     words/  cat.wav  sun.wav  apple.wav  the.wav  run.wav
     letters-phonemic/  c.wav  a.wav  t.wav
     hmm.wav
+    deflate.wav
   aoede/
     … (same subset as sulafat)
 ```

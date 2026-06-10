@@ -1,3 +1,10 @@
+# Glyphs word bundle — one entry per line: word [category]
+# Lines starting with # and blank lines are ignored. Append-only.
+# A word's optional category selects a delivery hint (CATEGORY_STYLES in
+# generate_clips.py); no category = plain storyteller read. Per-word
+# WORD_STYLES entries override categories either way.
+
+# ── original Phase 2 validation words (clips rendered; do not reorder) ──
 the
 and
 run
@@ -18,3 +25,739 @@ apple
 fish
 bird
 rain
+
+# ── sight & function words (plain) ──
+a
+i
+am
+an
+as
+at
+be
+by
+do
+he
+if
+in
+is
+it
+my
+no
+of
+on
+or
+so
+to
+up
+us
+we
+about
+after
+again
+all
+any
+are
+ask
+away
+because
+been
+before
+both
+but
+came
+can
+come
+did
+does
+done
+down
+each
+even
+every
+first
+for
+found
+from
+gave
+get
+give
+goes
+going
+gone
+got
+had
+has
+have
+her
+here
+him
+his
+how
+into
+just
+keep
+kept
+know
+last
+let
+live
+made
+make
+many
+may
+more
+most
+much
+must
+new
+not
+now
+off
+old
+once
+only
+other
+our
+out
+over
+please
+put
+said
+same
+saw
+say
+she
+show
+some
+soon
+take
+tell
+than
+thank
+thanks
+that
+them
+then
+there
+they
+think
+this
+those
+too
+under
+until
+use
+very
+want
+was
+well
+went
+were
+what
+when
+where
+which
+who
+why
+will
+with
+would
+yes
+yet
+your
+
+# ── time words (plain) ──
+day
+today
+tomorrow
+yesterday
+morning
+week
+year
+
+# ── actions ──
+blink action
+bounce action
+build action
+carry action
+catch action
+chase action
+clap action
+climb action
+close action
+count action
+crawl action
+cry action
+dance action
+dancing action
+dig action
+draw action
+drop action
+eat action
+eating action
+find action
+fly action
+flying action
+giggle action
+help action
+hide action
+hop action
+hug action
+jump action
+jumped action
+jumping action
+kick action
+kiss action
+laugh action
+listen action
+look action
+looking action
+march action
+nap action
+open action
+play action
+played action
+playing action
+point action
+pull action
+push action
+race action
+ran action
+read action
+reading action
+ride action
+roll action
+running action
+share action
+shout action
+sing action
+singing action
+sit action
+skip action
+sleep action
+sleeping action
+slide action
+smile action
+sneeze action
+spin action
+splash action
+stand action
+stomp action
+stop action
+swim action
+swimming action
+swing action
+talk action
+throw action
+tickle action
+tiptoe action
+touch action
+walk action
+walking action
+wash action
+wave action
+whisper action
+wiggle action
+wink action
+write action
+yawn action
+zoom action
+
+# ── animals ──
+ant animal
+ants animal
+bat animal
+bear animal
+bears animal
+bee animal
+bees animal
+birds animal
+bug animal
+bugs animal
+bunny animal
+butterfly animal
+cats animal
+chick animal
+chicken animal
+cow animal
+crab animal
+deer animal
+dinosaur animal
+dinosaurs animal
+dogs animal
+dolphin animal
+duck animal
+ducks animal
+elephant animal
+fox animal
+frog animal
+frogs animal
+giraffe animal
+goat animal
+hen animal
+hippo animal
+horse animal
+horses animal
+kitten animal
+kittens animal
+ladybug animal
+lion animal
+monkey animal
+moose animal
+mouse animal
+mice animal
+octopus animal
+owl animal
+penguin animal
+pig animal
+pigs animal
+pony animal
+puppy animal
+puppies animal
+rabbit animal
+raccoon animal
+seal animal
+shark animal
+sheep animal
+snail animal
+snake animal
+spider animal
+squirrel animal
+tiger animal
+turtle animal
+whale animal
+wolf animal
+worm animal
+worms animal
+zebra animal
+
+# ── family & people ──
+aunt family
+babies family
+baby family
+boy family
+boys family
+brother family
+cousin family
+daddy family
+family family
+friend family
+friends family
+girl family
+girls family
+grandma family
+grandpa family
+ian family
+kid family
+kids family
+kieran family
+man family
+mama family
+men family
+mommy family
+nana family
+papa family
+people family
+sister family
+teacher family
+uncle family
+woman family
+women family
+
+# ── colors ──
+black color
+blue color
+brown color
+gray color
+green color
+orange color
+pink color
+purple color
+rainbow color
+red color
+white color
+yellow color
+
+# ── food ──
+apples food
+banana food
+bananas food
+berry food
+bread food
+breakfast food
+butter food
+cake food
+candy food
+carrot food
+carrots food
+cereal food
+cheese food
+chocolate food
+cookie food
+cookies food
+corn food
+cracker food
+crackers food
+cupcake food
+dinner food
+egg food
+eggs food
+grape food
+grapes food
+honey food
+jam food
+juice food
+lemon food
+lunch food
+milk food
+noodles food
+nut food
+nuts food
+pancake food
+pancakes food
+peach food
+pear food
+peas food
+pie food
+pizza food
+popcorn food
+potato food
+rice food
+sandwich food
+snack food
+soup food
+strawberry food
+toast food
+waffle food
+watermelon food
+yogurt food
+
+# ── weather ──
+breeze weather
+cloud weather
+clouds weather
+cloudy weather
+fog weather
+ice weather
+icy weather
+lightning weather
+puddle weather
+puddles weather
+rainy weather
+snow weather
+snowing weather
+snowy weather
+storm weather
+sunny weather
+thunder weather
+wind weather
+windy weather
+
+# ── celestial ──
+comet celestial
+night celestial
+planet celestial
+planets celestial
+sky celestial
+space celestial
+stars celestial
+
+# ── nature ──
+beach nature
+dirt nature
+flower nature
+flowers nature
+forest nature
+garden nature
+grass nature
+hill nature
+hills nature
+lake nature
+leaf nature
+leaves nature
+mountain nature
+mountains nature
+mud nature
+ocean nature
+plant nature
+plants nature
+pond nature
+river nature
+rock nature
+rocks nature
+sand nature
+sea nature
+seed nature
+seeds nature
+shell nature
+shells nature
+stick nature
+sticks nature
+trees nature
+wood nature
+woods nature
+
+# ── body ──
+arm body
+arms body
+belly body
+cheek body
+cheeks body
+chin body
+ear body
+ears body
+elbow body
+eye body
+eyes body
+face body
+feet body
+finger body
+fingers body
+foot body
+hair body
+hand body
+hands body
+head body
+knee body
+knees body
+leg body
+legs body
+mouth body
+neck body
+nose body
+teeth body
+toe body
+toes body
+tooth body
+tummy body
+
+# ── home & belongings ──
+ball home
+balls home
+balloon home
+bath home
+bathtub home
+bed home
+bedroom home
+blanket home
+blocks home
+book home
+books home
+bowl home
+box home
+brush home
+chair home
+clock home
+couch home
+crayon home
+crayons home
+cup home
+doll home
+dolls home
+door home
+floor home
+fork home
+game home
+games home
+glue home
+home home
+house home
+key home
+keys home
+kitchen home
+lamp home
+light home
+lights home
+paint home
+paper home
+phone home
+pillow home
+plate home
+puzzle home
+room home
+soap home
+spoon home
+stairs home
+table home
+teddy home
+towel home
+toy home
+toys home
+wall home
+window home
+windows home
+
+# ── clothing (home delivery) ──
+boots home
+coat home
+dress home
+hat home
+mittens home
+pajamas home
+pants home
+scarf home
+shirt home
+shoe home
+shoes home
+sock home
+socks home
+
+# ── vehicles ──
+bike vehicle
+bikes vehicle
+boat vehicle
+boats vehicle
+bus vehicle
+car vehicle
+cars vehicle
+firetruck vehicle
+helicopter vehicle
+plane vehicle
+planes vehicle
+scooter vehicle
+sled vehicle
+tractor vehicle
+train vehicle
+trains vehicle
+truck vehicle
+trucks vehicle
+wagon vehicle
+
+# ── places ──
+circus place
+city place
+farm place
+library place
+museum place
+park place
+playground place
+road place
+school place
+store place
+street place
+town place
+zoo place
+
+# ── feelings & describing words ──
+angry feeling
+bad feeling
+big feeling
+bigger feeling
+biggest feeling
+brave feeling
+clean feeling
+cold feeling
+cool feeling
+cute feeling
+dirty feeling
+dry feeling
+excited feeling
+fast feeling
+funny feeling
+good feeling
+grumpy feeling
+happy feeling
+hard feeling
+hot feeling
+hungry feeling
+little feeling
+loud feeling
+love feeling
+mad feeling
+messy feeling
+nice feeling
+pretty feeling
+proud feeling
+quiet feeling
+sad feeling
+scared feeling
+shy feeling
+silly feeling
+sleepy feeling
+slow feeling
+small feeling
+soft feeling
+sticky feeling
+sweet feeling
+tall feeling
+thirsty feeling
+tiny feeling
+tired feeling
+warm feeling
+wet feeling
+young feeling
+yucky feeling
+yummy feeling
+
+# ── numbers (enough to count to the trillions) ──
+zero number
+one number
+two number
+three number
+four number
+five number
+six number
+seven number
+eight number
+nine number
+ten number
+eleven number
+twelve number
+thirteen number
+fourteen number
+fifteen number
+sixteen number
+seventeen number
+eighteen number
+nineteen number
+twenty number
+thirty number
+forty number
+fifty number
+sixty number
+seventy number
+eighty number
+ninety number
+hundred number
+thousand number
+million number
+billion number
+trillion number
+
+# ── whimsy & story words ──
+birthday magic
+castle magic
+crown magic
+dragon magic
+dragons magic
+elf magic
+fairy magic
+ghost magic
+giant magic
+glyph magic
+glyphs magic
+king magic
+knight magic
+magic magic
+mermaid magic
+monster magic
+monsters magic
+music magic
+pirate magic
+prince magic
+princess magic
+queen magic
+robot magic
+robots magic
+rocket magic
+rockets magic
+song magic
+songs magic
+story magic
+stories magic
+treasure magic
+unicorn magic
+wand magic
+wish magic
+witch magic
+wizard magic
