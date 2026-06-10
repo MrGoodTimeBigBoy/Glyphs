@@ -1,6 +1,15 @@
 # Glyphs
 
-A cozy, curious keyboard playground for an early reader, in a CRT-terminal shell: phosphor green on black, warm and slow. See `DESIGN.md` for the why, `ROADMAP.md` for the build order. This is Phase 1: the Electron shell and its containment — a black screen, a blinking cursor, and a cage that works.
+A cozy, curious keyboard playground for an early reader, in a CRT-terminal shell: phosphor green on black, warm and slow. See `DESIGN.md` for the why, `ROADMAP.md` for the build order.
+
+The app is a hub plus four worlds. The hub is a terminal: type any word and the machine speaks it (720 pre-rendered words; unknown words get sounded out letter by letter; some words trigger hidden ASCII flourishes). Typing a keyword opens a world — ESC always comes home:
+
+- **`find`** — letters fall toward ghosted slots spelling a word; catch them by key or click
+- **`hide`** — a breathing wall of one letter hides an impostor; find it, or build your own wall and let the machine seek
+- **`draw`** — a turtle canvas where every letter draws something; `p` for colors, `x` to clear
+- **`say`** — Simon Says for spelling: the machine spells with glowing tiles and musical tones, you type it back
+
+There are no scores, no levels, no failure states. Every letter has a fixed musical tone, the same in every world.
 
 ## Setup
 
@@ -10,7 +19,7 @@ Requires Node 22+ and npm.
 npm install
 ```
 
-Electron is the only dependency.
+Electron is the only dependency. The audio clips ship in the repo — no API keys or network needed to run the app (keys are only needed to *regenerate* clips; see `tools/tts/README.md`).
 
 ## Running
 
