@@ -8,6 +8,8 @@ For design intent behind any of these, see `DESIGN.md`. The roadmap is what to b
 
 ## Phase 1 — Electron shell and containment
 
+**Status: DONE.**
+
 Get a fullscreen Electron app running with all the lockdown behavior in place. No game content yet. Just a black screen with a blinking cursor — enough to prove the cage works.
 
 **Build:**
@@ -41,6 +43,8 @@ Get a fullscreen Electron app running with all the lockdown behavior in place. N
 
 ## Phase 2 — Audio validation harness
 
+**Status: DONE — gate passed.** Voice: Gemini TTS (via OpenRouter), `callirrhoe` primary, with `sulafat`/`aoede` kept as frozen bake-off subsets. Ian signed off after two listening rounds.
+
 Validate the audio pipeline before building anything that depends on it. This phase has a manual gate at the end: Ian listens and decides if the approach is good enough.
 
 **Build:**
@@ -69,6 +73,8 @@ Validate the audio pipeline before building anything that depends on it. This ph
 -----
 
 ## Phase 3 — The hub
+
+**Status: DONE.** Shipped with the full 720-word bundle (callirrhoe), `verify_clips.py` passing clean, and all 11 decorated starters. Merged to main in PR #4.
 
 The home screen. Typing, autocomplete, history, scrollback, decorated words. This is the heart of the app and the place Kieran will spend most of his time.
 
@@ -117,6 +123,8 @@ The home screen. Typing, autocomplete, history, scrollback, decorated words. Thi
 
 ## Phase 4 — `hide` world
 
+**Status: DONE — built out of order.** `find` shipped first (Phase 4 in the commit history) because it reused the most from the fresh word bundle; `hide` and `draw` followed together (Phase 5), then `say` with the letter-tone synth (Phase 6). All four worlds and the hub are live. Hider mode's TBDs got answered in implementation: pressing the wall's own letter four times flips into hider mode, and Enter (or a 3.5s pause once an impostor exists) hands the wall to the machine; speed rounds trigger every 4–6 founds.
+
 Implement the hide world end to end, including the base game, hider mode, and speed rounds.
 
 **Build:**
@@ -152,9 +160,11 @@ Implement the hide world end to end, including the base game, hider mode, and sp
 
 Not committed. Possible directions:
 
-- `draw` world (turtle/Logo mode with color palette)
-- `find` world (falling-letter sight-word catcher)
-- `say` world (Simon Says spelling — machine spells, child types back, letter tones throughout; whether it leapfrogs `draw` or `find` is Ian's call based on what Kieran is engaged with; requires Phase 2 audio including the letter-tone synth and Phase 3 hub keyword routing)
+- ~~`draw` world~~ ~~`find` world~~ ~~`say` world~~ — all four worlds are built; see the Phase 4 status note
+- Letter tones in `draw` — the world keeps its own action-pitched sounds for now; whether the fixed letter tones layer in or replace them is an ear test with Kieran
+- Tuning pass from playtesting: hide drift visibility, find fall speed, say show pacing, synthesized SFX volumes everywhere
+- Numbers play: he types `47`, the machine says "forty seven" composed from the number clips (the bundle counts to the trillions)
+- Voice bake-off resolution: confirm callirrhoe for good and drop the frozen sulafat/aoede subsets from the bundle
 - Additional decorated words
 - Pixel art replacing some ASCII flourishes
 - A second child profile if this turns out to be useful

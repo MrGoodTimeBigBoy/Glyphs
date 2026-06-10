@@ -52,7 +52,7 @@ The active input line has the blinking cursor. Recalled and historical entries a
 
 ### Strategy
 
-Most words the child types will be drawn from a known set: kindergarten and first-grade sight words, common nouns (animals, family, colors, foods, weather, household objects), and morphological variations (cat/cats, run/running/ran). These are **pre-rendered TTS clips** using a high-quality voice (Google Wavenet or similar). Estimated 600–800 clips, ~20–25MB bundled with the app.
+Most words the child types will be drawn from a known set: kindergarten and first-grade sight words, common nouns (animals, family, colors, foods, weather, household objects), and morphological variations (cat/cats, run/running/ran). These are **pre-rendered TTS clips** using a high-quality voice (Google Wavenet or similar). Estimated 600–800 clips, ~20–25MB bundled with the app. (As built: Gemini TTS, `callirrhoe` voice, 720 words plus letter names, phonemic letters, and interjections — WAV for now, so the bundle runs ~60MB; conversion to a compressed format is an easy later win.)
 
 Unknown words **do not** fall back to browser TTS. Instead, the machine says "hmm" and sounds out the letters individually using pre-rendered letter sounds. This is more useful for an early reader than hearing a synthesized voice mangle pronunciation, and it preserves the warmth of the known-words case.
 
@@ -166,8 +166,9 @@ The following were considered and explicitly cut:
 
 These should not block initial build but are worth holding in mind:
 
-- **Exact difficulty curves** for hide drift, find speed/density, and color hidden-tier mechanics. Will be tuned by playtesting with Kieran.
-- **Decorated word set for v1.** A starting list exists but the final selection is a creative decision worth time.
-- **Hider mode interaction details.** How does the child signal "I'm done hiding"? Press enter? The interaction needs prototyping.
-- **Speed round trigger logic.** Every N rounds? Random chance? Worth thinking about pacing.
-- **Pre-rendered TTS voice choice.** Multiple high-quality TTS providers exist. Pick one, generate samples, evaluate before committing to the asset bundle.
+- **Exact difficulty curves** for hide drift, find speed/density, say show pacing, and color hidden-tier mechanics. First-pass values are shipped in the worlds; tuning by playtesting with Kieran is the live question.
+- **Decorated word set for v1.** *Resolved:* all 11 starters shipped. Still meant to grow.
+- **Hider mode interaction details.** *Resolved in implementation:* pressing the wall's own letter four times flips into hider mode; Enter (or a 3.5s pause once an impostor is planted) hands the wall to the machine.
+- **Speed round trigger logic.** *Resolved in implementation:* every 4–6 found impostors, re-randomized each time.
+- **Pre-rendered TTS voice choice.** *Resolved:* Gemini TTS, `callirrhoe`, chosen by ear through the Phase 2 listening gate. The sulafat/aoede comparison subsets stay frozen in the bundle until the bake-off is formally closed.
+- **The buzz in `say`.** The wrong-key buzz-and-reset is the closest Glyphs comes to a punishing mechanic. It's built kind (a low sigh, gentle dim-out, the word never lost) — whether it *feels* kind is a playtesting question.
