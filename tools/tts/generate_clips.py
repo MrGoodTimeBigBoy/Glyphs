@@ -133,6 +133,10 @@ WORD_STYLES = {
     "tree":  "Calm and steady, full of quiet awe.",
     "rain":  "Gentle and soothing, like watching drops on a window.",
     "apple": "Cheerful and crisp.",
+    # "slow" + the feeling-category hint made the model trail off into
+    # silence (empty body from the API, every attempt 2026-06-10) —
+    # pin a delivery that stays audible.
+    "slow":  "Easygoing and warm, gently stretching the word out.",
     "mom":   "Extra loving and tender.",
     "dad":   "Warm and proud.",
     # the, and, see, like, you, me — plain storyteller delivery.
