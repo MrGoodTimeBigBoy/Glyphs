@@ -292,13 +292,14 @@
        2. Empty or contains any non a–z character → do nothing; return
           { type: 'junk' }. No audio, no TTS.
        3. isKnownWord → play single word clip; return { type: 'word' }.
-       4. All-alpha but unknown → play "hmm", then each letter's
-          phonemic clip in sequence with LETTER_GAP_MS gaps;
-          return { type: 'soundout', letters: [...] }.
+       4. Unknown all-alpha word → log a warning and call onDone so
+          callers never hang. Unknown-word audio is handled in hub.js
+          via G2P + playPhonemes (speak mode) or spellWord (spell mode);
+          play() is intentionally known-words-only now.
 
      opts (all optional):
-       onLetter(letter, idx)  — called before each phonemic letter clip
-       onDone()               — called when the sequence finishes
+       onDone()  — called when the clip finishes (or immediately if the
+                   word is unknown, so callers never stall)
   */
   function play(word, opts) {
     opts = opts || {};
@@ -323,15 +324,14 @@
       return { type: 'word' };
     }
 
-    /* legacy grapheme sound-out — replaced by G2P + playPhonemes; removed when hub is rewired */
-    /* ── Unknown all-alpha word: hmm + phonemic letters ────────── */
-    var letters = w.split('');
-    var items = [{ kind: 'hmm', key: '' }];
-    for (var i = 0; i < letters.length; i++) {
-      items.push({ kind: 'letter', key: letters[i] });
-    }
-    playSequence(items, myToken, opts, 0);
-    return { type: 'soundout', letters: letters };
+    /* Unknown word: the legacy grapheme sound-out has been removed.
+       Unknown-word audio is now handled by hub.js (G2P + playPhonemes
+       in speak mode; spellWord in spell mode). Fire onDone so callers
+       never hang, and log so any accidental call here is visible.     */
+    console.warn('Glyphs.audio.play: called with unknown word "' + w +
+                 '" — use playPhonemes or spellWord for unknown words.');
+    if (opts.onDone) opts.onDone();
+    return { type: 'unknown' };
   }
 
   /* ── playPhonemes(phonemes, opts) ────────────────────────────── */
@@ -461,17 +461,26 @@
     );
   }
 
-  /* ── playHmm() — the thinking sound ──────────────────────────── */
+  /* ── playHmm(opts) — the thinking sound ──────────────────────── */
   /*
      Phase 5 hide world (hider mode): the machine "hmm"s while it
-     theatrically searches. Same machinery as playLetterName.
+     theatrically searches.
+
+     Phase 6 hub speak mode: hub.js uses playHmm concurrently with
+     GlyphsHost.g2p() to cover G2P latency; opts.onDone is called once
+     the hmm clip ends so hub.js knows when it can start phonemes.
+
+     opts (all optional):
+       onDone()  — called when the hmm clip ends (or immediately if
+                   the clip is missing), so callers can chain work.
   */
-  function playHmm() {
+  function playHmm(opts) {
+    opts = opts || {};
     stopCurrent();
     var myToken = _seqToken;
     playUrl(clipUrl('hmm', ''), myToken,
-      function () { /* nothing more to do when it ends */ },
-      function () { /* missing clip — playUrl already warned */ }
+      function () { if (opts.onDone) opts.onDone(); },
+      function () { if (opts.onDone) opts.onDone(); /* missing clip — fire anyway */ }
     );
   }
 

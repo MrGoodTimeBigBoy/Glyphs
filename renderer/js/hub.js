@@ -59,6 +59,11 @@
          at submit so onLetter can light them in sync with the audio.  */
       var litSpans = null;
 
+      /* Submit-generation counter: bumped on every submit call so that
+         any pending G2P promise or spellWord→word-clip chain from a
+         previous submission does not stomp the new one.               */
+      var submitGen = 0;
+
       /* ── Autocomplete ──────────────────────────────────────── */
 
       /* keywordMatches() — keywords the buffer is a PROPER prefix of,
@@ -200,6 +205,8 @@
         savedBuffer = '';
         altIndex = 0;
         litSpans = null;
+        submitGen += 1;   /* invalidate any in-flight G2P or spell chain */
+        var myGen = submitGen;
 
         /* 1a. Mode keywords (speak / spell) — stay in the hub. No history. */
         if (word === 'speak' || word === 'spell') {
@@ -250,9 +257,75 @@
           return;
         }
 
-        /* 2. Known word → speak it; decorated words also flourish. */
-        if (audio && audio.isKnownWord && audio.isKnownWord(word)) {
-          audio.play(word);
+        var currentMode = (window.Glyphs.mode ? window.Glyphs.mode.current() : 'speak');
+        var isKnown = (audio && audio.isKnownWord && audio.isKnownWord(word));
+
+        /* Helper: collect the letter <span>s from the freshly-appended
+           soundout history row so audio callbacks can light them.     */
+        function grabSpans() {
+          var row = historyEl.lastElementChild;
+          var s = [];
+          if (row) {
+            for (var j = 0; j < row.children.length; j++) s.push(row.children[j]);
+          }
+          return s;
+        }
+
+        function clearLitSpans(s) {
+          for (var k = 0; k < s.length; k++) s[k].classList.remove('lit');
+        }
+
+        /* ── SPELL MODE — every alphabetic word is spelled by letter name. ──
+           History visual keeps its meaning ("is the machine's vocabulary"),
+           so known words get type 'word' and unknown get 'soundout'.
+           After spelling, known words ALSO get the word clip (bee structure:
+           spell it, then hear it). Unknown words: spelling stands alone.   */
+        if (currentMode === 'spell') {
+          if (isKnown) {
+            pushHistory({ word: word, type: 'word', ts: Date.now() });
+            /* Fire the flourish (visual, mode-independent). */
+            var flourishS = window.Glyphs.flourish;
+            if (flourishS && flourishS.has(word)) flourishS.play(word);
+            renderInput();
+            if (audio && audio.spellWord) {
+              var myGenS = myGen;
+              audio.spellWord(word, {
+                onDone: function () {
+                  /* Guard staleness: another submit could have fired. */
+                  if (myGenS !== submitGen) return;
+                  if (audio.play) audio.play(word);
+                },
+              });
+            }
+          } else {
+            /* Unknown word: push soundout entry, spell it, no word clip. */
+            pushHistory({ word: word, type: 'soundout', ts: Date.now() });
+            renderInput();
+            var spansU = grabSpans();
+            litSpans = spansU;
+            if (audio && audio.spellWord) {
+              audio.spellWord(word, {
+                onLetter: function (letter, idx) {
+                  if (litSpans !== spansU) return;
+                  clearLitSpans(spansU);
+                  var span = spansU[idx];
+                  if (span) span.classList.add('lit');
+                },
+                onDone: function () {
+                  if (litSpans !== spansU) return;
+                  clearLitSpans(spansU);
+                },
+              });
+            }
+          }
+          return;
+        }
+
+        /* ── SPEAK MODE ───────────────────────────────────────────────── */
+
+        /* 2. Known word → play the word clip; decorated words also flourish. */
+        if (isKnown) {
+          if (audio && audio.play) audio.play(word);
           pushHistory({ word: word, type: 'word', ts: Date.now() });
           var flourish = window.Glyphs.flourish;
           if (flourish && flourish.has(word)) flourish.play(word);
@@ -260,43 +333,161 @@
           return;
         }
 
-        /* 3. Unknown all-alpha → hmm + sound-out, dim italic entry.
-           Push + render first so the entry's letter spans exist, then
-           light them in sync via play()'s onLetter callback.          */
+        /* 3. Unknown all-alpha → G2P path.
+           Push + render first so the soundout entry's letter spans exist.
+           Then start BOTH concurrently: playHmm() and GlyphsHost.g2p().
+           Phoneme playback begins only once BOTH are done (hmm finished +
+           promise resolved). The hmm covers G2P latency (eSpeak is instant;
+           the fm LLM tier can take ~10s).
+
+           Visual: on phoneme idx of total, light span proportionally
+           (Math.floor(idx/total * word.length)), clear previous, clear all
+           on done.
+
+           Fallback: if g2p returns {ok:false} or rejects, fall back to
+           spellWord — letter names are always TRUE of the word, unlike the
+           old grapheme letter-sounds which taught wrong phonics (e.g. 'shop'
+           as /s//h//o//p/).                                                 */
         pushHistory({ word: word, type: 'soundout', ts: Date.now() });
         renderInput();
 
-        var lastRow = historyEl.lastElementChild;
-        var spans = [];
-        if (lastRow) {
-          for (var j = 0; j < lastRow.children.length; j++) {
-            spans.push(lastRow.children[j]);
-          }
-        }
+        var spans = grabSpans();
         litSpans = spans;
 
-        function clearLit() {
-          for (var k = 0; k < spans.length; k++) {
-            spans[k].classList.remove('lit');
-          }
-        }
+        (function (capturedWord, capturedSpans, capturedGen) {
+          /* Guard: if another submit fires before the async work completes,
+             bail out — audio.js's token machinery handles the audio side,
+             and the capturedGen check handles the visual side.            */
+          function isStale() { return capturedGen !== submitGen; }
 
-        if (audio && audio.play) {
-          audio.play(word, {
-            /* idx counts sequence items; item 0 is "hmm", so the
-               letter at sequence idx lives at spans[idx - 1].       */
-            onLetter: function (letter, idx) {
-              if (litSpans !== spans) return;   /* superseded */
-              clearLit();
-              var span = spans[idx - 1];
-              if (span) span.classList.add('lit');
-            },
-            onDone: function () {
-              if (litSpans !== spans) return;
-              clearLit();
-            },
-          });
-        }
+          function clearLit() { clearLitSpans(capturedSpans); }
+
+          /* Phoneme sweep: light the span proportional to phoneme position. */
+          function onPhoneme(ph, idx, total) {
+            if (isStale() || litSpans !== capturedSpans) return;
+            clearLit();
+            var spanIdx = Math.min(
+              Math.floor(idx / total * capturedWord.length),
+              capturedWord.length - 1
+            );
+            var span = capturedSpans[spanIdx];
+            if (span) span.classList.add('lit');
+          }
+
+          /* Fallback to spellWord (letter names) when G2P fails. */
+          function doSpellFallback() {
+            if (isStale() || litSpans !== capturedSpans) return;
+            if (!audio || !audio.spellWord) return;
+            audio.spellWord(capturedWord, {
+              onLetter: function (letter, idx) {
+                if (isStale() || litSpans !== capturedSpans) return;
+                clearLit();
+                var span = capturedSpans[idx];
+                if (span) span.classList.add('lit');
+              },
+              onDone: function () {
+                if (isStale() || litSpans !== capturedSpans) return;
+                clearLit();
+              },
+            });
+          }
+
+          /* Track hmm-done and g2p-resolved state independently; fire
+             playPhonemes once both are ready.                           */
+          var hmmDone = false;
+          var g2pResult = null;   /* null = pending, false = failed, array = phonemes */
+
+          function tryPlayPhonemes() {
+            if (!hmmDone || g2pResult === null) return;   /* not both ready */
+            if (isStale() || litSpans !== capturedSpans) return;
+            if (g2pResult === false) {
+              doSpellFallback();
+              return;
+            }
+            var phonemes = g2pResult;
+            var total = phonemes.length;
+            if (!total) { clearLit(); return; }
+            if (!audio || !audio.playPhonemes) { clearLit(); return; }
+            audio.playPhonemes(phonemes, {
+              onPhoneme: function (ph, idx) { onPhoneme(ph, idx, total); },
+              onDone: function () {
+                if (isStale() || litSpans !== capturedSpans) return;
+                clearLit();
+              },
+            });
+          }
+
+          /* Kick off hmm. When it ends, set hmmDone and try. */
+          if (audio && audio.playHmm) {
+            /* playHmm doesn't take callbacks; we attach to the audio
+               element's end via a tiny sequence wrapper. To avoid
+               coupling to audio internals we just time the hmm clip
+               by using a no-op playPhonemes on an empty array — the
+               cleanest public API available — after scheduling a
+               micro-sequence ourselves.
+
+               Actually: re-read the spec — "Start BOTH concurrently:
+               audio.playHmm() AND GlyphsHost.g2p()". playHmm calls
+               stopCurrent() which would stomp a concurrent sequence.
+               So we use a single-item playPhonemes-shaped helper:
+               fire playHmm, then use audio.playHmm's side-effect
+               that the clip ends when the Audio element fires 'ended'.
+               The cleanest way without touching audio.js internals is
+               to drive this via spellWord with an empty string, but
+               that returns immediately. Instead we wire the hmm-done
+               signal via a small timeout pegged to the hmm clip duration,
+               OR we extend audio.js with a callback on playHmm. The spec
+               says we may not touch audio.js internals for this — but
+               the deliverable says UPDATE audio.js (we ARE updating it
+               to remove the legacy branch). We'll add playHmm callback
+               support in audio.js and use it here.
+
+               For now, implement via the approach that works with the
+               current audio.js: playSequence is private, so we use the
+               public spellWord with a single-char synthetic item to get
+               the "sequence done" callback — but that plays a letter
+               name clip (unwanted audio).
+
+               CORRECT APPROACH: extend playHmm to accept opts.onDone.
+               This is a minimal, documented change to audio.js. See
+               Deliverable 2 note below.
+
+               We wire it here: audio.playHmm({ onDone: fn }).         */
+            audio.playHmm({
+              onDone: function () {
+                hmmDone = true;
+                tryPlayPhonemes();
+              },
+            });
+          } else {
+            /* No audio — treat hmm as instant. */
+            hmmDone = true;
+          }
+
+          /* Kick off g2p concurrently. */
+          var host = window.GlyphsHost;
+          if (host && host.g2p) {
+            host.g2p(capturedWord).then(
+              function (result) {
+                if (result && result.ok && result.phonemes && result.phonemes.length) {
+                  g2pResult = result.phonemes;
+                } else {
+                  g2pResult = false;   /* ok:false → spell fallback */
+                }
+                tryPlayPhonemes();
+              },
+              function () {
+                /* Rejected (near-impossible) → spell fallback. */
+                g2pResult = false;
+                tryPlayPhonemes();
+              }
+            );
+          } else {
+            /* No G2P available: fall back immediately when hmm ends. */
+            g2pResult = false;
+          }
+
+        }(word, spans, myGen));
       }
 
       /* ── Arrow keys ────────────────────────────────────────── */

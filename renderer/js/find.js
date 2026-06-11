@@ -478,8 +478,14 @@
             return;
           }
 
-          var audio = window.Glyphs.audio;
-          if (audio && audio.playLetterName) audio.playLetterName(slot.ch);
+          /* Audio design: find is deliberately mode-agnostic — its unit is
+             the sub-word letter, where the phoneme/letter-name distinction
+             doesn't apply. Letters are voiced by their musical tones (the
+             letter's body); the completion word clip (in celebrate()) is
+             identical in both modes. This gives find a consistent musical
+             identity regardless of speak/spell mode.                       */
+          var t = window.Glyphs.tones;
+          if (t && t.play) t.play(slot.ch, { gain: 0.7 });
         }, FLY_MS);
       }
 
