@@ -4,7 +4,7 @@
    Letters fall from the top of the screen. Near the bottom, fixed slots
    show the target word as faintly-ghosted letters. When a falling letter
    is near the catch line and the child presses its key (or clicks it),
-   it locks into its slot with a small thunk and the letter's name clip.
+   it locks into its slot with a small thunk and the letter's musical tone.
    All slots filled → the word pulses, its flourish plays if it has one,
    and the word clip is spoken; a new word begins after a beat.
 
@@ -24,10 +24,11 @@
    Mouse: clicking/tapping near a falling letter (huge forgiving hitbox)
    behaves like pressing its key.
 
-   Audio: speech only via pre-rendered clips through window.Glyphs.audio
-   (letter-name on a catch, word clip on completion). The small sound
-   effects (thunk, chime, dud, click) are synthesized here with the Web
-   Audio API — no TTS of any kind, ever (the hard rule).
+   Audio: a caught letter plays its musical tone (mode-agnostic — see the
+   note at doCatch); the only speech is the word clip on completion via
+   window.Glyphs.audio, identical in both modes. The small sound effects
+   (thunk, chime, dud, click) are synthesized here with the Web Audio
+   API — no TTS of any kind, ever (the hard rule).
 */
 
 (function () {
@@ -478,8 +479,14 @@
             return;
           }
 
-          var audio = window.Glyphs.audio;
-          if (audio && audio.playLetterName) audio.playLetterName(slot.ch);
+          /* Audio design: find is deliberately mode-agnostic — its unit is
+             the sub-word letter, where the phoneme/letter-name distinction
+             doesn't apply. Letters are voiced by their musical tones (the
+             letter's body); the completion word clip (in celebrate()) is
+             identical in both modes. This gives find a consistent musical
+             identity regardless of speak/spell mode.                       */
+          var t = window.Glyphs.tones;
+          if (t && t.play) t.play(slot.ch, { gain: 0.7 });
         }, FLY_MS);
       }
 

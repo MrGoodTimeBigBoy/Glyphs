@@ -156,11 +156,43 @@ Implement the hide world end to end, including the base game, hider mode, and sp
 
 -----
 
+## Phase 7 — Speak/spell modes, G2P pipeline, palette system
+
+**Status: DONE.** Branch `spell-speak-modes`, merged to main.
+
+This phase corrects an existing defect — unknown words were sounded out grapheme-by-grapheme, which was wrong phonics (`shop` came out /s//h//o//p/ instead of /ʃ//ɒ//p/) — and adds a sibling mode alongside the fix.
+
+**Build:**
+
+- `renderer/js/mode.js`: global speak/spell mode. Persisted in `userData/mode.json`, default `speak`. Body class swap on change; 600 ms `mode-flux` ease so the palette shift feels smooth, not instant.
+- Mode keywords (`speak`, `spell`) in the hub's autocomplete vocabulary. Typing the other mode's keyword previews in that mode's color. Enter switches and plays the double-utterance: entering spell, the machine spells "SPELL" by letter names; entering speak, it pronounces "SPEAK" by phonemes (S P IY K). Already in that mode: silent no-op.
+- **Speak mode** (phosphor green): unknown words go through the three-tier G2P pipeline (`g2p/index.js`) — CMU Pronouncing Dictionary (instant) → eSpeak NG WASM (near-instant) → `fm` CLI / Apple Foundation Models (on-device LLM, enum-constrained JSON schema, ~10 s for the long tail). `hmm` and G2P run concurrently; phoneme playback starts once both are ready. G2P failure falls back to `spellWord` (letter names are always true). Developer affordances: `GLYPHS_PHONICS_TIER=cmu|espeak|llm`, `GLYPHS_LOG_TIER=1`.
+- **Spell mode** (amber): every typed word spelled by letter names. Known words get the word clip after spelling (bee structure). Unknown words: spelling stands alone.
+- `audio.js`: new `playPhonemes(phonemes, opts)` and `spellWord(word, opts)` functions; `playHmm` extended with `opts.onDone`; legacy grapheme sound-out path removed.
+- Phoneme clip library (`renderer/audio/callirrhoe/phonemes/`, 39 ARPABET clips). Optimised for concatenation: energy-threshold silence trim, 5/25 ms fades, RMS normalisation to a common target. Per-phoneme-class playback gaps in `audio.js` (stops 30 ms, affricates 40, vowels 60, other continuants 50).
+- `tools/tts/generate_clips.py` extended with `PHONEME_MAP` (39 entries, each a spelling + conditioning hint) and the five `PHONEME_*` constants for clip processing. `npm run test-g2p` and `npm run test-phonemes` added.
+- `tools/tts/test_phonemes.py`: concatenates CMU words from the new clips for A/B against pre-rendered word clips. This is the ear-iteration loop.
+- Cross-world mode policy: `hide` announces found letters with the phonemic sound in speak mode, the letter name in spell mode. `say` celebrates with the word clip in speak mode, with `spellWord` in spell mode (no word clip). `find` is deliberately mode-agnostic: caught letters play their musical tones; the completion word clip is identical in both modes.
+- Palette: all colors flow through mode-keyed CSS custom properties on `body.mode-speak` / `body.mode-spell`. Amber ramp brightness-matched to green. Mode-independent bright values at `:root` for the hub preview.
+
+**Definition of done:**
+
+- Typing an unknown word in speak mode sounds out its true phonemes, not its graphemes.
+- Typing an unknown word in spell mode spells it by letter names.
+- `speak` and `spell` keywords switch mode, play the double-utterance, and preview correctly while typing.
+- `hide`, `say`, and `find` behave per the cross-world policy above.
+- Palette swaps cleanly on mode change; all four worlds update.
+
+**Asset status:** all 39 phoneme clips are rendered and committed (`verify_clips.py` passes clean, 833/833). The remaining work is an ear-tuning pass — some clips run long, especially the vowels. Iterate with `npm run test-phonemes -- cat dog ship fish sun chop` (A/B `tmp/phoneme-test/<word>.wav` against the pre-rendered word clips), adjust the `PHONEME_MAP` spelling or the conditioning constants, delete the offending clip, and re-run the generator to re-render just that one. See `tools/tts/README.md` for the full workflow.
+
+-----
+
 ## Phase 5+ — Future
 
 Not committed. Possible directions:
 
 - ~~`draw` world~~ ~~`find` world~~ ~~`say` world~~ — all four worlds are built; see the Phase 4 status note
+- ~~Unknown-word G2P and speak/spell modes~~ — done in Phase 7
 - Letter tones in `draw` — the world keeps its own action-pitched sounds for now; whether the fixed letter tones layer in or replace them is an ear test with Kieran
 - Tuning pass from playtesting: hide drift visibility, find fall speed, say show pacing, synthesized SFX volumes everywhere
 - Numbers play: he types `47`, the machine says "forty seven" composed from the number clips (the bundle counts to the trillions)

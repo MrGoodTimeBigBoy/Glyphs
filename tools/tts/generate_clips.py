@@ -36,6 +36,7 @@ Usage:
     python3 tools/tts/generate_clips.py --voices sulafat --force
     python3 tools/tts/generate_clips.py --api gemini --probe
 """
+from __future__ import annotations
 
 import argparse
 import array
@@ -46,6 +47,7 @@ import math
 import os
 import pathlib
 import re
+import struct
 import sys
 import time
 import urllib.error
@@ -228,6 +230,172 @@ LETTER_NAME_MAP = {
 }
 
 # ---------------------------------------------------------------------------
+# ARPABET phoneme spellings for the 39 phonemes of American English
+# ---------------------------------------------------------------------------
+
+# Text fed to TTS for each ARPABET phoneme's isolated sound.
+#
+# Like PHONEMIC_MAP, these spellings are first-pass approximations that get
+# iterated by ear after the first render.  If a phoneme sounds wrong, fix
+# its spelling here and re-render with:
+#     python3 tools/tts/generate_clips.py --voices callirrhoe --force
+#
+# Spelling philosophy:
+#   - Vowels: the natural English spelling of the vowel sound is usually
+#     right, sometimes lengthened (e.g. "aaa") to prevent over-shortening.
+#   - Stops (B D G K P T): English stops inherently release with a tiny
+#     schwa; we aim for the minimal "consonant + uh" burst using "buh",
+#     "duh", etc.  A light schwa release is unavoidable and acceptable.
+#   - Fricatives/affricates: spelled as close to the pure sound as possible.
+#   - Nasals/liquids/glides: extended spelling to hold the target articulation.
+#
+# Prompt text below disambiguates where the spelling alone is ambiguous
+# (e.g. "th" is both voiced and unvoiced; "ng" could read as n+g).
+PHONEME_MAP = {
+    # --- Vowels ---
+    # AA: "ah" as in "father"  (open back unrounded)
+    "AA": ("aah", "the vowel sound 'ah' as in 'father', just the sound"),
+    # AE: "a" as in "cat"  (near-open front unrounded)
+    "AE": ("aaa", "the vowel sound 'a' as in 'cat', just the sound"),
+    # AH: reduced schwa / "uh" as in "about"  (mid central)
+    "AH": ("uh", "the short vowel sound 'uh' as in 'about', just the sound"),
+    # AO: "aw" as in "thought"  (open-mid back rounded)
+    "AO": ("aw", "the vowel sound 'aw' as in 'thought', just the sound"),
+    # AW: "ow" diphthong as in "cow"  (AO+W glide)
+    "AW": ("ow", "the vowel sound 'ow' as in 'cow', just the sound"),
+    # AY: "eye" diphthong as in "sky"  (AA+Y glide)
+    "AY": ("eye", "the vowel sound 'eye' as in 'sky', just the sound"),
+    # EH: "e" as in "bed"  (open-mid front unrounded)
+    "EH": ("ehh", "the vowel sound 'e' as in 'bed', just the sound"),
+    # ER: r-colored vowel as in "bird"  (r-colored mid central)
+    "ER": ("errr", "the vowel sound 'er' as in 'bird', just the sound"),
+    # EY: "ay" diphthong as in "say"  (EH+Y glide)
+    "EY": ("ayy", "the vowel sound 'ay' as in 'say', just the sound"),
+    # IH: "i" as in "bit"  (near-close near-front unrounded)
+    "IH": ("ih", "the short vowel sound 'i' as in 'bit', just the sound"),
+    # IY: "ee" as in "see"  (close front unrounded)
+    "IY": ("eee", "the vowel sound 'ee' as in 'see', just the sound"),
+    # OW: "oh" diphthong as in "go"  (OW glide)
+    "OW": ("ohh", "the vowel sound 'oh' as in 'go', just the sound"),
+    # OY: "oy" diphthong as in "boy"  (AO+Y glide)
+    "OY": ("oy", "the vowel sound 'oy' as in 'boy', just the sound"),
+    # UH: "oo" as in "book"  (near-close near-back rounded)
+    "UH": ("ooh", "the vowel sound 'oo' as in 'book', just the sound"),
+    # UW: "oo" as in "cool"  (close back rounded)
+    "UW": ("oooh", "the vowel sound 'oo' as in 'cool', just the sound"),
+
+    # --- Stops ---
+    # B: voiced bilabial stop
+    "B":  ("buh", "the consonant sound 'b' as in 'bat', just the sound, a light burst"),
+    # D: voiced alveolar stop
+    "D":  ("duh", "the consonant sound 'd' as in 'dog', just the sound, a light burst"),
+    # G: voiced velar stop
+    "G":  ("guh", "the consonant sound 'g' as in 'go', just the sound, a light burst"),
+    # K: voiceless velar stop
+    "K":  ("kuh", "the consonant sound 'k' as in 'cat', just the sound, a light burst"),
+    # P: voiceless bilabial stop
+    "P":  ("puh", "the consonant sound 'p' as in 'pat', just the sound, a light burst"),
+    # T: voiceless alveolar stop
+    "T":  ("tuh", "the consonant sound 't' as in 'top', just the sound, a light burst"),
+
+    # --- Affricates ---
+    # CH: voiceless postalveolar affricate, as in "church"
+    "CH": ("ch", "the sound 'ch' as in 'church', just the sound"),
+    # JH: voiced postalveolar affricate, as in "jump"
+    "JH": ("juh", "the sound 'j' as in 'jump', just the sound"),
+
+    # --- Fricatives ---
+    # DH: voiced dental fricative, as in "the" (NOT unvoiced "th" as in "think")
+    "DH": ("th", "the voiced 'th' sound as in 'the' or 'this', just the sound (voiced, not as in 'think')"),
+    # F: voiceless labiodental fricative
+    "F":  ("fff", "the consonant sound 'f' as in 'fan', just the sound"),
+    # HH: voiceless glottal fricative, as in "hat"
+    "HH": ("huh", "the consonant sound 'h' as in 'hat', just a breath burst"),
+    # S: voiceless alveolar fricative
+    "S":  ("sss", "the consonant sound 's' as in 'sun', just the hissing sound"),
+    # SH: voiceless postalveolar fricative, as in "ship"
+    "SH": ("shh", "the sound 'sh' as in 'ship', just the sound"),
+    # TH: voiceless dental fricative, as in "think" (NOT voiced "th" as in "the")
+    "TH": ("th", "the unvoiced 'th' sound as in 'think' or 'thin', just the sound (unvoiced, not as in 'the')"),
+    # V: voiced labiodental fricative
+    "V":  ("vvv", "the consonant sound 'v' as in 'van', just the sound"),
+    # Z: voiced alveolar fricative
+    "Z":  ("zzz", "the consonant sound 'z' as in 'zoo', just the buzzing sound"),
+    # ZH: voiced postalveolar fricative, as in "measure"
+    "ZH": ("zh", "the sound 'zh' as in 'measure' or 'vision', just the sound"),
+
+    # --- Nasals ---
+    # M: voiced bilabial nasal
+    "M":  ("mmm", "the consonant sound 'm' as in 'man', just the nasal hum"),
+    # N: voiced alveolar nasal
+    "N":  ("nnn", "the consonant sound 'n' as in 'no', just the nasal sound"),
+    # NG: voiced velar nasal, as in "sing" (NOT n+g; the ng at the end of 'sing')
+    "NG": ("ng", "the nasal sound 'ng' as in 'sing' or 'ring', just the sound (not n+g)"),
+
+    # --- Liquids ---
+    # L: voiced alveolar lateral approximant
+    "L":  ("lll", "the consonant sound 'l' as in 'lip', just the sound"),
+    # R: voiced alveolar approximant
+    "R":  ("rrr", "the consonant sound 'r' as in 'run', just the sound"),
+
+    # --- Glides ---
+    # W: voiced labial-velar approximant
+    "W":  ("wuh", "the consonant sound 'w' as in 'win', just the sound"),
+    # Y: voiced palatal approximant
+    "Y":  ("yuh", "the consonant sound 'y' as in 'yes', just the sound"),
+}
+
+# The ordered list of all 39 ARPABET phonemes for the American English set.
+PHONEME_SYMBOLS = [
+    "AA", "AE", "AH", "AO", "AW", "AY",
+    "B",  "CH", "D",  "DH", "EH", "ER",
+    "EY", "F",  "G",  "HH", "IH", "IY",
+    "JH", "K",  "L",  "M",  "N",  "NG",
+    "OW", "OY", "P",  "R",  "S",  "SH",
+    "T",  "TH", "UH", "UW", "V",  "W",
+    "Y",  "Z",  "ZH",
+]
+
+# Prompt for phoneme clips: the model must produce ONLY the isolated sound,
+# not a letter name or word.
+PROMPT_PHONEME = (
+    "Say only this isolated phoneme sound, clearly, the way a speech therapist "
+    "demonstrates a single sound for a child — no leading words, no explanation, "
+    "just the sound itself. The phoneme:"
+)
+
+# ---------------------------------------------------------------------------
+# Phoneme post-processing constants
+# (These are the critical conditioning knobs for concatenation quality —
+#  small changes here cascade into how every G2P-decomposed word sounds.)
+# ---------------------------------------------------------------------------
+
+# Energy threshold (0–32767 ≈ 16-bit full-scale) below which a sample is
+# considered "silence" for the purpose of leading/trailing trim.
+PHONEME_ENERGY_THRESHOLD = 200
+
+# Silence to preserve at the very start of a trimmed phoneme clip (ms).
+# A little headroom prevents clicks at the attack of stops/affricates.
+PHONEME_HEAD_PAD_MS = 10
+
+# Silence to preserve at the end of a trimmed phoneme clip (ms).
+# Long enough for the last resonance of nasals/liquids to decay naturally.
+PHONEME_TAIL_PAD_MS = 30
+
+# Fade-in at the start of a phoneme clip (ms).
+# Kills any click that survives the head-pad trim.
+PHONEME_FADE_IN_MS = 5
+
+# Fade-out at the end of a phoneme clip (ms).
+# Kills the tail click without smearing the final formant.
+PHONEME_FADE_OUT_MS = 25
+
+# RMS normalisation target for phoneme clips (0–1 as a fraction of full-scale).
+# Chosen so that concatenated phoneme sequences match the loudness of word
+# clips — ear-tune this alongside the gap constants in audio.js.
+PHONEME_RMS_TARGET = 0.08
+
+# ---------------------------------------------------------------------------
 # API constants
 # ---------------------------------------------------------------------------
 
@@ -333,6 +501,107 @@ def finalize_audio(raw: bytes, sample_rate: int = 24000,
         return pcm_to_wav(conditioned, sample_rate=sample_rate,
                           channels=channels), "wav"
     return raw, ext
+
+
+def condition_phoneme(wav_bytes: bytes) -> bytes:
+    """Post-process a phoneme WAV clip for concatenation quality.
+
+    Applied after the standard tail conditioning (which is still run via
+    finalize_audio before this function is called on the resulting WAV).
+    Steps:
+      1. Decode WAV to s16le samples (stdlib wave only — no audioop).
+      2. Trim leading and trailing silence below PHONEME_ENERGY_THRESHOLD,
+         keeping PHONEME_HEAD_PAD_MS / PHONEME_TAIL_PAD_MS of silence at
+         each end.
+      3. Short fade-in (PHONEME_FADE_IN_MS) and fade-out (PHONEME_FADE_OUT_MS)
+         to kill any residual click at the splice points.
+      4. RMS-normalise to PHONEME_RMS_TARGET so no phoneme jumps out of a
+         concatenated sequence.
+
+    Operates on the 16-bit PCM with stdlib only (wave + array + struct).
+    audioop is intentionally avoided — it may be absent on Python 3.13+.
+    """
+    # --- 1. Decode WAV ---
+    buf = io.BytesIO(wav_bytes)
+    with wave.open(buf, "rb") as wf:
+        rate     = wf.getframerate()
+        channels = wf.getnchannels()
+        width    = wf.getsampwidth()
+        n_frames = wf.getnframes()
+        raw_pcm  = wf.readframes(n_frames)
+
+    # Parse s16le samples; work in mono (channels == 1 guaranteed for our
+    # pipeline, but handle multi-channel gracefully by summing to mono).
+    n_samples_total = len(raw_pcm) // 2
+    all_samples = array.array("h")
+    all_samples.frombytes(raw_pcm[: n_samples_total * 2])
+
+    if channels > 1:
+        # Average channels into mono.
+        mono = array.array("h")
+        for i in range(0, len(all_samples), channels):
+            s = sum(all_samples[i + c] for c in range(channels)) // channels
+            mono.append(max(-32768, min(32767, s)))
+        samples = mono
+        channels = 1
+    else:
+        samples = all_samples
+
+    n = len(samples)
+    if n == 0:
+        return wav_bytes   # nothing to process
+
+    # --- 2. Trim leading silence ---
+    head_pad_samples = int(rate * PHONEME_HEAD_PAD_MS / 1000)
+    tail_pad_samples = int(rate * PHONEME_TAIL_PAD_MS / 1000)
+
+    # Find first sample above threshold.
+    first_loud = 0
+    for i in range(n):
+        if abs(samples[i]) > PHONEME_ENERGY_THRESHOLD:
+            first_loud = i
+            break
+
+    # Find last sample above threshold.
+    last_loud = n - 1
+    for i in range(n - 1, -1, -1):
+        if abs(samples[i]) > PHONEME_ENERGY_THRESHOLD:
+            last_loud = i
+            break
+
+    start = max(0, first_loud - head_pad_samples)
+    end   = min(n, last_loud + tail_pad_samples + 1)
+    samples = array.array("h", samples[start:end])
+    n = len(samples)
+
+    if n == 0:
+        return wav_bytes   # clip was entirely silence — return original
+
+    # --- 3. Fade in and fade out ---
+    n_fade_in  = min(n, int(rate * PHONEME_FADE_IN_MS  / 1000))
+    n_fade_out = min(n, int(rate * PHONEME_FADE_OUT_MS / 1000))
+
+    for j in range(n_fade_in):
+        gain = j / n_fade_in    # linear ramp 0 → 1
+        samples[j] = int(samples[j] * gain)
+
+    for j in range(n_fade_out):
+        gain = (n_fade_out - j) / n_fade_out    # linear ramp 1 → 0
+        samples[n - n_fade_out + j] = int(samples[n - n_fade_out + j] * gain)
+
+    # --- 4. RMS normalise ---
+    sum_sq = sum(s * s for s in samples)
+    rms = math.sqrt(sum_sq / n) if n > 0 else 0.0
+    if rms > 0:
+        target_rms = PHONEME_RMS_TARGET * 32767.0
+        gain = target_rms / rms
+        # Cap so we never amplify completely silent or near-silent clips to
+        # a damaging level — max 8× gain.
+        gain = min(gain, 8.0)
+        for i in range(n):
+            samples[i] = max(-32768, min(32767, int(samples[i] * gain)))
+
+    return pcm_to_wav(samples.tobytes(), sample_rate=rate, channels=channels)
 
 # ---------------------------------------------------------------------------
 # HTTP helper with retry
@@ -517,11 +786,36 @@ def call_tts_api(api: str, text: str, voice_api: str, model: str,
         return call_tts_gemini(text, voice_api, model, api_key)
     return call_tts_openrouter(text, voice_api, model, api_key)
 
+def keychain_api_key(service: str) -> str | None:
+    """Read an API key from the macOS Keychain (returns None off-macOS,
+    when the item is absent, or when access is denied).
+
+    Store the key once, outside any repo, with:
+        security add-generic-password -a "$USER" -s SERVICE_NAME -w 'the-key' -U
+    """
+    if sys.platform != "darwin":
+        return None
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["security", "find-generic-password", "-s", service, "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return None
+    key = out.stdout.strip()
+    return key if out.returncode == 0 and key else None
+
 def resolve_api_key(api: str) -> str:
-    """Read the backend's API key from the environment or exit with help."""
+    """Read the backend's API key from the environment or the macOS
+    Keychain (service name == env var name), or exit with help."""
     env_names = API_CONFIGS[api]["key_env"]
     for name in env_names:
         key = os.environ.get(name)
+        if key:
+            return key
+    for name in env_names:
+        key = keychain_api_key(name)
         if key:
             return key
     hint = {
@@ -530,7 +824,9 @@ def resolve_api_key(api: str) -> str:
     }[api]
     print(
         f"ERROR: no API key set for --api {api}.\n"
-        f"Export one of: {', '.join(env_names)}\n{hint}",
+        f"Export one of: {', '.join(env_names)} — or store it in the macOS\n"
+        f"Keychain: security add-generic-password -a \"$USER\" "
+        f"-s {env_names[0]} -w 'the-key' -U\n{hint}",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -768,6 +1064,18 @@ def clips_for_voice(words: list[str], categories: dict[str, str],
                 "prompt": f"{PROMPT_LETTER_NAME} {name_text}",
             })
 
+    # Phonemes — 39 ARPABET phonemes of American English (primary voice only;
+    # bake-off voices do not need phoneme clips — they are not used for G2P).
+    if not is_bakeoff:
+        for ph in PHONEME_SYMBOLS:
+            spelling, context = PHONEME_MAP[ph]
+            clips.append({
+                "category": "phonemes",
+                "stem": ph.lower(),
+                "prompt": f"{PROMPT_PHONEME} {context}. Sound: {spelling}",
+                "post_process": "phoneme",
+            })
+
     # hmm
     if is_bakeoff and not BAKEOFF_HMM:
         pass
@@ -805,6 +1113,7 @@ def write_manifest(out_dir: pathlib.Path,
     bakeoff_words_js = json.dumps(BAKEOFF_WORDS)
     voices_js        = json.dumps(voices_used)
     words_js         = json.dumps(words_generated)
+    phonemes_js      = json.dumps([ph.lower() for ph in PHONEME_SYMBOLS])
 
     content = f"""\
 /* GENERATED by tools/tts/generate_clips.py — do not edit by hand. */
@@ -815,7 +1124,8 @@ window.Glyphs.audio.manifest = {{
   voices: {voices_js},
   ext: {json.dumps(ext_used)},
   words: {words_js},
-  bakeoffWords: {bakeoff_words_js}
+  bakeoffWords: {bakeoff_words_js},
+  phonemes: {phonemes_js}
 }};
 """
     manifest_path = out_dir / "manifest.js"
@@ -1072,6 +1382,15 @@ def main(argv=None):
                 print(f"  [ERROR] {dest_base}: {exc}", file=sys.stderr)
                 counts["err"] += 1
                 continue
+
+            # Phoneme clips get additional post-processing for concatenation
+            # quality: tight trim, fade-in/out, and RMS normalisation.
+            if clip.get("post_process") == "phoneme" and ext == "wav":
+                try:
+                    audio_bytes = condition_phoneme(audio_bytes)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  [warn]  condition_phoneme failed for "
+                          f"{clip['stem']}: {exc}", file=sys.stderr)
 
             dest = dest_base.with_suffix(f".{ext}")
             dest.parent.mkdir(parents=True, exist_ok=True)

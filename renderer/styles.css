@@ -1,3 +1,82 @@
+/* ── Palette: mode-keyed CSS custom properties ──────────────────── */
+/* body.mode-speak  = phosphor green (default)                       */
+/* body.mode-spell  = amber CRT                                      */
+/* :root defines the green values as a safety net.                   */
+
+:root {
+  --ph-bright:     #33ff33;
+  --ph-bright-alt: #29e029;
+  --ph-mid:        #26cc26;
+  --ph-dim:        #1a8f1a;
+  --ph-faint:      #147014;
+  --ph-ghost:      #0f4f0f;
+  --ph-neutral:    #9a9a9a;
+  --ph-bright-rgb: 51, 255, 51;
+
+  /* Mode-independent bright values — used by the target-mode preview
+     (hub-preview-speak / hub-preview-spell) and any future cross-mode
+     comparisons. These never change with the active mode.             */
+  --ph-speak-bright:     #33ff33;
+  --ph-speak-bright-rgb: 51, 255, 51;
+  --ph-spell-bright:     #ffb000;
+  --ph-spell-bright-rgb: 255, 176, 0;
+}
+
+body.mode-speak {
+  --ph-bright:     #33ff33;
+  --ph-bright-alt: #29e029;
+  --ph-mid:        #26cc26;
+  --ph-dim:        #1a8f1a;
+  --ph-faint:      #147014;
+  --ph-ghost:      #0f4f0f;
+  --ph-neutral:    #9a9a9a;
+  --ph-bright-rgb: 51, 255, 51;
+}
+
+body.mode-spell {
+  --ph-bright:     #ffb000;
+  --ph-bright-alt: #e09b00;
+  --ph-mid:        #cc8d00;
+  --ph-dim:        #8f6300;
+  --ph-faint:      #704d00;
+  --ph-ghost:      #4f3700;
+  --ph-neutral:    #9a9a9a;
+  --ph-bright-rgb: 255, 176, 0;
+}
+
+/* ── Mode transition (mode.js adds/removes this class for ~600 ms) ── */
+/* Applies a short ease to color-bearing properties across all elements
+   so the palette swap feels smooth, not instant. The class is removed
+   after 600 ms so ongoing keyframe animations are not permanently
+   damped — CSS transitions lose to animations, so this is safe, but
+   removing it keeps future animation additions straightforward.       */
+
+body.mode-flux,
+body.mode-flux * {
+  transition:
+    color          0.45s ease,
+    background-color 0.45s ease,
+    border-color   0.45s ease,
+    box-shadow     0.45s ease,
+    text-shadow    0.45s ease;
+}
+
+/* ── Hub target-mode preview coloring ───────────────────────────── */
+/* When the child has typed exactly the OTHER mode's keyword, the live
+   input text previews in that mode's bright color — a hint of where
+   Enter leads. Only the typed text changes; the cursor keeps its own
+   color from .cursor (unchanged).                                    */
+
+.hub-text.hub-preview-speak {
+  color: var(--ph-speak-bright);
+  text-shadow: 0 0 8px rgba(var(--ph-speak-bright-rgb), 0.55);
+}
+
+.hub-text.hub-preview-spell {
+  color: var(--ph-spell-bright);
+  text-shadow: 0 0 8px rgba(var(--ph-spell-bright-rgb), 0.55);
+}
+
 /* ── reset & base ───────────────────────────────────────────────── */
 
 *,
@@ -52,9 +131,9 @@ body.pointer-hidden * {
   width: 0.6em;
   height: 1.2em;
   font-size: 28px;          /* establishes the em base */
-  background: #33ff33;
+  background: var(--ph-bright);
   /* faint phosphor glow — subtle, not distracting */
-  box-shadow: 0 0 6px #33ff33;
+  box-shadow: 0 0 6px var(--ph-bright);
   animation: blink 1.06s step-end infinite;
 }
 
@@ -64,7 +143,7 @@ body.pointer-hidden * {
 .audio-harness {
   font-family: monospace;
   font-size: 20px;
-  color: #33ff33;
+  color: var(--ph-bright);
   display: flex;
   flex-direction: column;
   gap: 0.9em;
@@ -75,25 +154,25 @@ body.pointer-hidden * {
 
 .harness-hint {
   font-size: 0.72em;
-  color: #1a8f1a;           /* dim — a muted phosphor green */
+  color: var(--ph-dim);           /* dim — a muted phosphor green */
   letter-spacing: 0.04em;
 }
 
 .harness-voice {
   font-size: 0.82em;
-  color: #26cc26;
+  color: var(--ph-mid);
   cursor: pointer;          /* clicking also cycles the voice */
 }
 
 .harness-voice span {
-  color: #33ff33;
+  color: var(--ph-bright);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .harness-status {
   font-size: 1em;
-  color: #29e029;
+  color: var(--ph-bright-alt);
   min-height: 1.4em;
   letter-spacing: 0.02em;
 }
@@ -102,7 +181,7 @@ body.pointer-hidden * {
   display: flex;
   align-items: center;
   font-size: 1.15em;
-  color: #33ff33;
+  color: var(--ph-bright);
   /* The .cursor inside inherits the harness font-size via em base override */
 }
 
@@ -118,7 +197,7 @@ body.pointer-hidden * {
 
 .harness-history {
   font-size: 0.75em;
-  color: #1a8f1a;
+  color: var(--ph-dim);
   display: flex;
   flex-direction: column;
   gap: 0.25em;
@@ -131,18 +210,18 @@ body.pointer-hidden * {
 }
 
 .harness-history .h-word {
-  color: #26cc26;
+  color: var(--ph-mid);
   min-width: 8ch;
 }
 
 .harness-history .h-result {
-  color: #1a8f1a;
+  color: var(--ph-dim);
 }
 
 /* Letter highlight during sound-out */
 .harness-status .lit {
-  color: #33ff33;
-  text-shadow: 0 0 8px #33ff33;
+  color: var(--ph-bright);
+  text-shadow: 0 0 8px var(--ph-bright);
 }
 
 /* ── Phase 3: the hub ───────────────────────────────────────────── */
@@ -161,7 +240,7 @@ body.pointer-hidden * {
   padding: 1.5em 2.5em 1.2em;
   font-family: monospace;
   font-size: 24px;
-  color: #33ff33;
+  color: var(--ph-bright);
 }
 
 /* display:flex would defeat the hidden attribute — be explicit. */
@@ -181,20 +260,20 @@ body.pointer-hidden * {
 
 /* Historical entries are dimmer than the live line. */
 .hub-entry {
-  color: #1a8f1a;
+  color: var(--ph-dim);
   white-space: pre;
 }
 
 /* Unknown-but-spoken words: dimmer still, and italic. */
 .hub-entry.hub-soundout {
-  color: #147014;
+  color: var(--ph-faint);
   font-style: italic;
 }
 
 /* Letter highlight during a sound-out (the .lit pattern). */
 .hub-entry .lit {
-  color: #33ff33;
-  text-shadow: 0 0 8px #33ff33;
+  color: var(--ph-bright);
+  text-shadow: 0 0 8px var(--ph-bright);
 }
 
 /* ── hub input line ─────────────────────────────────────────────── */
@@ -207,18 +286,18 @@ body.pointer-hidden * {
 }
 
 .hub-prompt {
-  color: #1a8f1a;            /* dim prompt glyph */
+  color: var(--ph-dim);            /* dim prompt glyph */
   margin-right: 0.6ch;
 }
 
 .hub-text {
-  color: #33ff33;            /* bright phosphor — the live text */
+  color: var(--ph-bright);            /* bright phosphor — the live text */
   white-space: pre;
 }
 
 /* A recalled entry sits on the input line dimmer than live typing. */
 .hub-input-line.hub-recalled .hub-text {
-  color: #1a8f1a;
+  color: var(--ph-dim);
 }
 
 /* Block cursor inherits the hub font size (overrides the 28px base). */
@@ -231,7 +310,7 @@ body.pointer-hidden * {
 
 /* Ghost completion: gray, NOT green — clearly "not yet typed". */
 .hub-ghost {
-  color: #9a9a9a;
+  color: var(--ph-neutral);
   white-space: pre;
   margin-left: 2px;
 }
@@ -249,11 +328,11 @@ body.pointer-hidden * {
 }
 
 .hub-alt {
-  color: #147014;
+  color: var(--ph-faint);
 }
 
 .hub-alt.sel {
-  color: #26cc26;            /* highlighted alternative (ghost follows it) */
+  color: var(--ph-mid);            /* highlighted alternative (ghost follows it) */
 }
 
 /* ── tiny feedback animations ───────────────────────────────────── */
@@ -298,13 +377,13 @@ body.pointer-hidden * {
 }
 
 .world-stub-line {
-  color: #1a8f1a;            /* dim phosphor */
+  color: var(--ph-dim);            /* dim phosphor */
 }
 
 /* Key mash inside a stub: a brief bright ping, then back to dim. */
 @keyframes stub-ping {
-  0%   { color: #33ff33; text-shadow: 0 0 8px #33ff33; }
-  100% { color: #1a8f1a; text-shadow: none; }
+  0%   { color: var(--ph-bright); text-shadow: 0 0 8px var(--ph-bright); }
+  100% { color: var(--ph-dim); text-shadow: none; }
 }
 
 .world-stub-line.ping {
@@ -321,7 +400,7 @@ body.pointer-hidden * {
   inset: 0;
   overflow: hidden;
   font-family: monospace;
-  color: #33ff33;
+  color: var(--ph-bright);
 }
 
 .find[hidden] {
@@ -339,14 +418,14 @@ body.pointer-hidden * {
   transform: translate(-50%, -50%);
   font-size: 64px;
   line-height: 1;
-  color: #33ff33;
-  text-shadow: 0 0 10px rgba(51, 255, 51, 0.45);
+  color: var(--ph-bright);
+  text-shadow: 0 0 10px rgba(var(--ph-bright-rgb), 0.45);
   will-change: top;
 }
 
 /* A caught letter is mid-flight to its slot (transition set in JS). */
 .find-letter.caught {
-  text-shadow: 0 0 14px rgba(51, 255, 51, 0.8);
+  text-shadow: 0 0 14px rgba(var(--ph-bright-rgb), 0.8);
 }
 
 /* A pressed/clicked distractor dissolves with a small fizzle.      */
@@ -376,14 +455,14 @@ body.pointer-hidden * {
   left: 6%;
   right: 6%;
   top: 74%;
-  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+  border-top: 1px dashed rgba(var(--ph-bright-rgb), 0.22);
 }
 
 /* Generic keypress ping: the line brightens for a beat (the        */
 /* machine noticed you — mashing absorbed, never punished).         */
 @keyframes find-line-ping {
-  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
-  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+  0%   { border-top-color: rgba(var(--ph-bright-rgb), 0.6); }
+  100% { border-top-color: rgba(var(--ph-bright-rgb), 0.22); }
 }
 
 .find-catchline.ping {
@@ -404,14 +483,14 @@ body.pointer-hidden * {
 }
 
 .find-slot {
-  color: #0f4f0f;            /* ghost — clearly readable, clearly empty */
+  color: var(--ph-ghost);            /* ghost — clearly readable, clearly empty */
   min-width: 1ch;
   text-align: center;
 }
 
 .find-slot.locked {
-  color: #33ff33;
-  text-shadow: 0 0 12px rgba(51, 255, 51, 0.6);
+  color: var(--ph-bright);
+  text-shadow: 0 0 12px rgba(var(--ph-bright-rgb), 0.6);
 }
 
 /* A slot locking in (and the bonus-chime sparkle): a quick pop.    */
@@ -427,9 +506,9 @@ body.pointer-hidden * {
 
 /* The right key with nothing catchable: its ghost slot stirs.      */
 @keyframes find-slot-hint {
-  0%   { color: #0f4f0f; }
-  40%  { color: #26cc26; text-shadow: 0 0 8px rgba(51, 255, 51, 0.4); }
-  100% { color: #0f4f0f; }
+  0%   { color: var(--ph-ghost); }
+  40%  { color: var(--ph-mid); text-shadow: 0 0 8px rgba(var(--ph-bright-rgb), 0.4); }
+  100% { color: var(--ph-ghost); }
 }
 
 .find-slot.hint {
@@ -438,8 +517,8 @@ body.pointer-hidden * {
 
 /* All slots filled: the whole word pulses and glows for a moment.  */
 @keyframes find-word-pulse {
-  0%, 100% { transform: scale(1);    text-shadow: 0 0 12px rgba(51, 255, 51, 0.6); }
-  50%      { transform: scale(1.12); text-shadow: 0 0 22px rgba(51, 255, 51, 0.95); }
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 12px rgba(var(--ph-bright-rgb), 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 22px rgba(var(--ph-bright-rgb), 0.95); }
 }
 
 .find-slots.find-complete .find-slot {
@@ -463,12 +542,12 @@ body.pointer-hidden * {
   font-size: 20px;
   line-height: 1.15;
   white-space: pre;
-  color: #26cc26;
-  text-shadow: 0 0 6px rgba(51, 255, 51, 0.35);
+  color: var(--ph-mid);
+  text-shadow: 0 0 6px rgba(var(--ph-bright-rgb), 0.35);
 }
 
 .flourish-sprite.flourish-dim {
-  color: #1a8f1a;
+  color: var(--ph-dim);
   text-shadow: none;
 }
 
@@ -489,9 +568,9 @@ body.pointer-hidden * {
   z-index: 20;
   background: linear-gradient(
     to bottom,
-    rgba(51, 255, 51, 0)    0%,
-    rgba(51, 255, 51, 0.05) 50%,
-    rgba(51, 255, 51, 0)    100%
+    rgba(var(--ph-bright-rgb), 0)    0%,
+    rgba(var(--ph-bright-rgb), 0.05) 50%,
+    rgba(var(--ph-bright-rgb), 0)    100%
   );
   transform: translateY(-140px);  /* parked off-screen until animated */
 }
@@ -505,14 +584,14 @@ body.crt-on .crt-scanline {
   animation: crt-sweep 10s linear infinite;
 }
 
-/* Phosphor flicker: a full-screen green tint whose opacity wobbles  */
+/* Phosphor flicker: a full-screen tint whose opacity wobbles        */
 /* at barely perceptible amplitude. Alive, not busy.                 */
 .crt-flicker {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 19;
-  background: #33ff33;
+  background: var(--ph-bright);
   opacity: 0;
 }
 
@@ -545,7 +624,7 @@ body.crt-on .crt-flicker {
   inset: 0;
   overflow: hidden;
   font-family: monospace;
-  color: #26cc26;
+  color: var(--ph-mid);
 }
 
 .hide[hidden] {
@@ -563,14 +642,14 @@ body.crt-on .crt-flicker {
 
 .hide-cell {
   line-height: 1;
-  color: #26cc26;
-  text-shadow: 0 0 6px rgba(51, 255, 51, 0.25);
+  color: var(--ph-mid);
+  text-shadow: 0 0 6px rgba(var(--ph-bright-rgb), 0.25);
   will-change: transform;
 }
 
 /* Hider mode: unbuilt cells are dim placeholder dots.                */
 .hide-cell.ghost {
-  color: #0f4f0f;
+  color: var(--ph-ghost);
   text-shadow: none;
 }
 
@@ -582,14 +661,14 @@ body.crt-on .crt-flicker {
 }
 
 .hide-cell.next {
-  color: #26cc26;
+  color: var(--ph-mid);
   animation: hide-next-blink 1.06s step-end infinite;
 }
 
 /* Tiny keypress/click ping: flash bright, then animate home (no      */
 /* 100% frame — the browser eases back to the cell's own color).      */
 @keyframes hide-cell-ping {
-  0% { color: #33ff33; text-shadow: 0 0 10px rgba(51, 255, 51, 0.8); }
+  0% { color: var(--ph-bright); text-shadow: 0 0 10px rgba(var(--ph-bright-rgb), 0.8); }
 }
 
 .hide-cell.ping {
@@ -620,8 +699,8 @@ body.crt-on .crt-flicker {
 
 /* The found impostor (its growth/scatter transforms are inline).     */
 .hide-cell.bright {
-  color: #33ff33;
-  text-shadow: 0 0 18px rgba(51, 255, 51, 0.9);
+  color: var(--ph-bright);
+  text-shadow: 0 0 18px rgba(var(--ph-bright-rgb), 0.9);
 }
 
 /* The machine's eye (hider mode): a phosphor ring with a pupil. It   */
@@ -632,10 +711,10 @@ body.crt-on .crt-flicker {
   width: 1.7em;
   height: 1.7em;
   margin: -0.85em 0 0 -0.85em;   /* left/top receive the cell center */
-  border: 2px solid #33ff33;
+  border: 2px solid var(--ph-bright);
   border-radius: 50%;
-  box-shadow: 0 0 16px rgba(51, 255, 51, 0.55),
-              inset 0 0 10px rgba(51, 255, 51, 0.3);
+  box-shadow: 0 0 16px rgba(var(--ph-bright-rgb), 0.55),
+              inset 0 0 10px rgba(var(--ph-bright-rgb), 0.3);
   transition: left 560ms ease-in-out, top 560ms ease-in-out;
   pointer-events: none;
   z-index: 3;
@@ -654,8 +733,8 @@ body.crt-on .crt-flicker {
   height: 0.5em;
   margin: -0.25em 0 0 -0.25em;
   border-radius: 50%;
-  background: #33ff33;
-  box-shadow: 0 0 10px #33ff33;
+  background: var(--ph-bright);
+  box-shadow: 0 0 10px var(--ph-bright);
 }
 
 /* The eye blinking as it hovers a suspect (and at the reveal).       */
@@ -683,7 +762,7 @@ body.crt-on .crt-flicker {
   inset: 0;
   overflow: hidden;
   font-family: monospace;
-  color: #33ff33;
+  color: var(--ph-bright);
 }
 
 .draw[hidden] {
@@ -710,8 +789,8 @@ body.crt-on .crt-flicker {
   font-size: 20px;
   line-height: 1;
   white-space: pre;
-  color: #33ff33;
-  text-shadow: 0 0 10px rgba(51, 255, 51, 0.9);
+  color: var(--ph-bright);
+  text-shadow: 0 0 10px rgba(var(--ph-bright-rgb), 0.9);
   transition: left 70ms linear, top 70ms linear, transform 90ms ease-out;
   will-change: left, top, transform;
 }
@@ -755,7 +834,7 @@ body.crt-on .crt-flicker {
   width: 30px;
   height: 30px;
   z-index: 4;
-  border: 1px solid rgba(51, 255, 51, 0.4);
+  border: 1px solid rgba(var(--ph-bright-rgb), 0.4);
   border-radius: 3px;
 }
 
@@ -783,8 +862,8 @@ body.crt-on .crt-flicker {
   padding: 20px;
   z-index: 6;
   background: rgba(0, 0, 0, 0.88);
-  border: 1px solid #1a8f1a;
-  box-shadow: 0 0 18px rgba(51, 255, 51, 0.18);
+  border: 1px solid var(--ph-dim);
+  box-shadow: 0 0 18px rgba(var(--ph-bright-rgb), 0.18);
 }
 
 .draw-palette[hidden] {
@@ -823,7 +902,7 @@ body.crt-on .crt-flicker {
   align-items: center;
   justify-content: center;
   font-family: monospace;
-  color: #33ff33;
+  color: var(--ph-bright);
 }
 
 /* display:flex would defeat the hidden attribute — be explicit. */
@@ -845,22 +924,22 @@ body.crt-on .crt-flicker {
 /* dimming inherits this slow base transition — so the wrong-key reset  */
 /* eases the lit letters back gently, never harshly.                    */
 .say-letter {
-  color: #0f4f0f;            /* ghost — readable, clearly waiting */
+  color: var(--ph-ghost);            /* ghost — readable, clearly waiting */
   min-width: 1ch;
   text-align: center;
   transition: color 650ms ease-out, text-shadow 650ms ease-out;
 }
 
 .say-letter.lit {
-  color: #33ff33;
-  text-shadow: 0 0 14px rgba(51, 255, 51, 0.6);
+  color: var(--ph-bright);
+  text-shadow: 0 0 14px rgba(var(--ph-bright-rgb), 0.6);
   transition: color 70ms ease-out, text-shadow 70ms ease-out;
 }
 
 /* A clicked tile (or a show-phase key): a glow-pulse, like a touch —   */
 /* bright at 0%, then the browser eases back to the tile's own state.   */
 @keyframes say-letter-ping {
-  0% { color: #26cc26; text-shadow: 0 0 10px rgba(51, 255, 51, 0.55); }
+  0% { color: var(--ph-mid); text-shadow: 0 0 10px rgba(var(--ph-bright-rgb), 0.55); }
 }
 
 .say-letter.ping {
@@ -869,14 +948,14 @@ body.crt-on .crt-flicker {
 
 /* Completion: the whole word glows brightly and pulses for a moment.   */
 .say-letter.bright {
-  color: #33ff33;
-  text-shadow: 0 0 18px rgba(51, 255, 51, 0.9);
+  color: var(--ph-bright);
+  text-shadow: 0 0 18px rgba(var(--ph-bright-rgb), 0.9);
   transition: color 70ms ease-out, text-shadow 70ms ease-out;
 }
 
 @keyframes say-word-pulse {
-  0%, 100% { transform: scale(1);    text-shadow: 0 0 14px rgba(51, 255, 51, 0.6); }
-  50%      { transform: scale(1.12); text-shadow: 0 0 24px rgba(51, 255, 51, 0.95); }
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 14px rgba(var(--ph-bright-rgb), 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 24px rgba(var(--ph-bright-rgb), 0.95); }
 }
 
 .say-word.say-complete .say-letter {
@@ -888,12 +967,12 @@ body.crt-on .crt-flicker {
 .say-line {
   width: 42%;
   margin-top: 1.4em;
-  border-top: 1px dashed rgba(51, 255, 51, 0.22);
+  border-top: 1px dashed rgba(var(--ph-bright-rgb), 0.22);
 }
 
 @keyframes say-line-ping {
-  0%   { border-top-color: rgba(51, 255, 51, 0.6); }
-  100% { border-top-color: rgba(51, 255, 51, 0.22); }
+  0%   { border-top-color: rgba(var(--ph-bright-rgb), 0.6); }
+  100% { border-top-color: rgba(var(--ph-bright-rgb), 0.22); }
 }
 
 .say-line.ping {

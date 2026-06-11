@@ -3,11 +3,14 @@
    audio/manifest.js; does not overwrite it).
 
    RULE: this file must NEVER reference window.speechSynthesis or
-   SpeechSynthesisUtterance. Unknown words are sounded out from pre-rendered
-   clips only — "hmm" + per-letter phonemic clips in the current voice.
+   SpeechSynthesisUtterance. Everything is pre-rendered clips. Unknown
+   words are handled by hub.js via G2P + playPhonemes (speak mode) or
+   spellWord (spell mode) — never directly by this engine; play() itself
+   speaks known words only.
 
    Clip path layout (relative to the renderer page):
      word clip        audio/<voice>/words/<word>.<ext>
+     phoneme clip     audio/<voice>/phonemes/<arpabet>.<ext>
      phonemic letter  audio/<voice>/letters-phonemic/<letter>.<ext>
      letter name      audio/<voice>/letters-name/<letter>.<ext>
      hmm              audio/<voice>/hmm.<ext>
@@ -28,9 +31,27 @@
   var BAKEOFF_LETTERS = ['c', 'a', 't'];
   /* hmm is present in every voice — no need to list it here.       */
 
-  /* Gap between letters during sound-out, in ms.
-     Trimmed from 120 at the listening gate ("a shade long").         */
-  var LETTER_GAP_MS = 100;
+  /* Gap between letter-names in spellWord(), in ms.
+     Letter names are full syllables ("see", "ay", "tee") — they need
+     more air than the phonemic letter-sound gap.  Ear-tune candidate. */
+  var LETTER_NAME_GAP_MS = 140;
+
+  /* Inter-phoneme gap table for playPhonemes(), in ms.
+     These are ear-tuning candidates — change here AND keep audio.js
+     and tools/tts/test_phonemes.py in lockstep.
+     Classes follow standard ARPABET articulatory groupings.          */
+  var PHONEME_GAPS = {
+    /* stops */
+    B: 30, D: 30, G: 30, K: 30, P: 30, T: 30,
+    /* affricates */
+    CH: 40, JH: 40,
+    /* vowels */
+    AA: 60, AE: 60, AH: 60, AO: 60, AW: 60, AY: 60,
+    EH: 60, ER: 60, EY: 60, IH: 60, IY: 60,
+    OW: 60, OY: 60, UH: 60, UW: 60,
+    /* default (fricatives / nasals / liquids / glides): 50 ms */
+  };
+  var PHONEME_GAP_DEFAULT_MS = 50;
 
   /* ── State ────────────────────────────────────────────────────── */
   var _currentVoiceIndex = 0;
@@ -109,11 +130,12 @@
   function clipUrl(kind, key) {
     var voice = voiceForClip(kind, key);
     var e = ext();
-    if (kind === 'word')   return 'audio/' + voice + '/words/' + key + '.' + e;
-    if (kind === 'letter') return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
+    if (kind === 'word')     return 'audio/' + voice + '/words/' + key + '.' + e;
+    if (kind === 'letter')   return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
     if (kind === 'lettername') return 'audio/' + voice + '/letters-name/' + key + '.' + e;
-    if (kind === 'hmm')    return 'audio/' + voice + '/hmm.' + e;
-    if (kind === 'deflate') return 'audio/' + voice + '/deflate.' + e;
+    if (kind === 'phoneme')  return 'audio/' + primary() + '/phonemes/' + key.toLowerCase() + '.' + e;
+    if (kind === 'hmm')      return 'audio/' + voice + '/hmm.' + e;
+    if (kind === 'deflate')  return 'audio/' + voice + '/deflate.' + e;
     return null;
   }
 
@@ -202,11 +224,28 @@
     }
   }
 
+  /* gapForItem(item) — return the inter-item gap in ms.
+     0 = immediate advance (e.g. after hmm before the letter sequence). */
+  function gapForItem(item) {
+    if (item.kind === 'lettername') return LETTER_NAME_GAP_MS;
+    if (item.kind === 'phoneme') {
+      var ph = (item.key || '').toUpperCase();
+      return (PHONEME_GAPS[ph] !== undefined) ? PHONEME_GAPS[ph] : PHONEME_GAP_DEFAULT_MS;
+    }
+    return 0;   /* hmm, word — no inter-item gap */
+  }
+
   /* playSequence(items, myToken, opts, idx)
      items: array of { kind, key } objects
-     Plays items[idx] then recurses, honouring LETTER_GAP_MS between
-     items. opts.onLetter(letter, idx) called before each letter item.
-     opts.onDone() called when the whole sequence completes.          */
+     Plays items[idx] then recurses, honouring per-kind gaps between
+     items.
+
+     Supported item kinds: 'lettername', 'phoneme', 'hmm', 'word'.
+
+     Callback dispatch:
+       opts.onLetter(key, idx)   — before each 'lettername' item
+       opts.onPhoneme(key, idx)  — before each 'phoneme' item
+       opts.onDone()             — when the whole sequence completes   */
   function playSequence(items, myToken, opts, idx) {
     if (myToken !== _seqToken) return;
     if (idx >= items.length) {
@@ -217,8 +256,11 @@
     var item = items[idx];
     var url = clipUrl(item.kind, item.key);
 
-    if (opts.onLetter && item.kind === 'letter') {
+    if (opts.onLetter && item.kind === 'lettername') {
       opts.onLetter(item.key, idx);
+    }
+    if (opts.onPhoneme && item.kind === 'phoneme') {
+      opts.onPhoneme(item.key, idx);
     }
 
     function advance() {
@@ -228,11 +270,11 @@
         if (opts.onDone) opts.onDone();
         return;
       }
-      /* Small gap between letters; no gap after "hmm" (word clip). */
-      if (item.kind === 'letter') {
+      var gap = gapForItem(item);
+      if (gap > 0) {
         setTimeout(function () {
           playSequence(items, myToken, opts, next);
-        }, LETTER_GAP_MS);
+        }, gap);
       } else {
         playSequence(items, myToken, opts, next);
       }
@@ -248,13 +290,14 @@
        2. Empty or contains any non a–z character → do nothing; return
           { type: 'junk' }. No audio, no TTS.
        3. isKnownWord → play single word clip; return { type: 'word' }.
-       4. All-alpha but unknown → play "hmm", then each letter's
-          phonemic clip in sequence with LETTER_GAP_MS gaps;
-          return { type: 'soundout', letters: [...] }.
+       4. Unknown all-alpha word → log a warning and call onDone so
+          callers never hang. Unknown-word audio is handled in hub.js
+          via G2P + playPhonemes (speak mode) or spellWord (spell mode);
+          play() is intentionally known-words-only now.
 
      opts (all optional):
-       onLetter(letter, idx)  — called before each phonemic letter clip
-       onDone()               — called when the sequence finishes
+       onDone()  — called when the clip finishes (or immediately if the
+                   word is unknown, so callers never stall)
   */
   function play(word, opts) {
     opts = opts || {};
@@ -279,14 +322,122 @@
       return { type: 'word' };
     }
 
-    /* ── Unknown all-alpha word: hmm + phonemic letters ────────── */
-    var letters = w.split('');
-    var items = [{ kind: 'hmm', key: '' }];
-    for (var i = 0; i < letters.length; i++) {
-      items.push({ kind: 'letter', key: letters[i] });
+    /* Unknown word: the legacy grapheme sound-out has been removed.
+       Unknown-word audio is now handled by hub.js (G2P + playPhonemes
+       in speak mode; spellWord in spell mode). Fire onDone so callers
+       never hang, and log so any accidental call here is visible.     */
+    console.warn('Glyphs.audio.play: called with unknown word "' + w +
+                 '" — use playPhonemes or spellWord for unknown words.');
+    if (opts.onDone) opts.onDone();
+    return { type: 'unknown' };
+  }
+
+  /* ── playPhonemes(phonemes, opts) ────────────────────────────── */
+  /*
+     Speak mode: plays renderer/audio/callirrhoe/phonemes/<ph>.wav for
+     each ARPABET phoneme in the array, with per-class inter-phoneme
+     gaps (PHONEME_GAPS / PHONEME_GAP_DEFAULT_MS).
+
+     phonemes: array of ARPABET symbols e.g. ['SH', 'AA', 'P']
+               (case-normalised internally).
+
+     opts (all optional):
+       onPhoneme(ph, idx)  — called before each phoneme clip starts;
+                             ph is the normalised uppercase symbol,
+                             idx is its position in the array (0-based).
+       onDone()            — called when the last clip ends.
+
+     Reuses the shared playSequence machinery; supersedes any in-flight
+     audio.
+  */
+  function playPhonemes(phonemes, opts) {
+    opts = opts || {};
+    if (!phonemes || !phonemes.length) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    stopCurrent();
+    var myToken = _seqToken;
+    var items = [];
+    for (var i = 0; i < phonemes.length; i++) {
+      items.push({ kind: 'phoneme', key: (phonemes[i] || '').toUpperCase() });
     }
     playSequence(items, myToken, opts, 0);
-    return { type: 'soundout', letters: letters };
+  }
+
+  /* ── spellWord(word, opts) ────────────────────────────────────── */
+  /*
+     Spell mode: plays the letter-name clip (letters-name/<letter>.wav)
+     for each a–z character of the word in order, with LETTER_NAME_GAP_MS
+     between each letter name.
+
+     Non a–z characters are silently skipped (spaces, digits, hyphens,
+     etc. — this keeps the function safe for any word the hub hands it).
+
+     opts (all optional):
+       onLetter(letter, idx)  — called before each letter-name clip;
+                                letter is the lowercase character,
+                                idx is its position in the original word
+                                (0-based, counting ALL characters including
+                                skipped ones) so callers can highlight the
+                                right position in a displayed word.
+       onDone()               — called when the last clip ends.
+  */
+  function spellWord(word, opts) {
+    opts = opts || {};
+    var w = (word || '').toLowerCase();
+    if (!w) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    stopCurrent();
+    var myToken = _seqToken;
+    var items = [];
+    for (var i = 0; i < w.length; i++) {
+      var ch = w[i];
+      if (/^[a-z]$/.test(ch)) {
+        /* Wrap the per-character index in a closure so onLetter reports
+           the position in the original word, not just the a–z subset.  */
+        items.push({ kind: 'lettername', key: ch, wordIdx: i });
+      }
+    }
+    if (!items.length) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    /* Adapt opts: spellWord exposes onLetter(letter, wordIdx); playSequence
+       dispatches opts.onLetter(key, seqIdx).  We bridge with a wrapper.  */
+    var adaptedOpts = {
+      onDone: opts.onDone,
+    };
+    if (opts.onLetter) {
+      adaptedOpts.onLetter = function (key, seqIdx) {
+        /* seqIdx is position within items[]; items[seqIdx].wordIdx is
+           the position in the original word string.                    */
+        var wordIdx = (items[seqIdx] && items[seqIdx].wordIdx !== undefined)
+          ? items[seqIdx].wordIdx
+          : seqIdx;
+        opts.onLetter(key, wordIdx);
+      };
+    }
+    playSequence(items, myToken, adaptedOpts, 0);
+  }
+
+  /* ── playLetterSound(letter) — single phonemic letter clip ───── */
+  /*
+     Convenience wrapper: plays the phonemic letter clip for a single
+     a–z character from letters-phonemic/ — the hide world's speak-mode
+     announcement. Sibling of playLetterName.
+  */
+  function playLetterSound(letter) {
+    var l = (letter || '').toLowerCase();
+    if (!/^[a-z]$/.test(l)) return;
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('letter', l), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
   }
 
   /* ── playLetterName(letter) — single letter-name clip ────────── */
@@ -307,17 +458,26 @@
     );
   }
 
-  /* ── playHmm() — the thinking sound ──────────────────────────── */
+  /* ── playHmm(opts) — the thinking sound ──────────────────────── */
   /*
      Phase 5 hide world (hider mode): the machine "hmm"s while it
-     theatrically searches. Same machinery as playLetterName.
+     theatrically searches.
+
+     Phase 6 hub speak mode: hub.js uses playHmm concurrently with
+     GlyphsHost.g2p() to cover G2P latency; opts.onDone is called once
+     the hmm clip ends so hub.js knows when it can start phonemes.
+
+     opts (all optional):
+       onDone()  — called when the hmm clip ends (or immediately if
+                   the clip is missing), so callers can chain work.
   */
-  function playHmm() {
+  function playHmm(opts) {
+    opts = opts || {};
     stopCurrent();
     var myToken = _seqToken;
     playUrl(clipUrl('hmm', ''), myToken,
-      function () { /* nothing more to do when it ends */ },
-      function () { /* missing clip — playUrl already warned */ }
+      function () { if (opts.onDone) opts.onDone(); },
+      function () { if (opts.onDone) opts.onDone(); /* missing clip — fire anyway */ }
     );
   }
 
@@ -345,14 +505,17 @@
          the manifest data that manifest.js may have already set.    */
       window.Glyphs.audio = window.Glyphs.audio || {};
 
-      window.Glyphs.audio.getVoices      = voices;
+      window.Glyphs.audio.getVoices       = voices;
       window.Glyphs.audio.getCurrentVoice = currentVoice;
-      window.Glyphs.audio.cycleVoice     = cycleVoice;
-      window.Glyphs.audio.isKnownWord    = isKnownWord;
-      window.Glyphs.audio.play           = play;
-      window.Glyphs.audio.playDeflate    = playDeflate;
-      window.Glyphs.audio.playLetterName = playLetterName;
-      window.Glyphs.audio.playHmm        = playHmm;
+      window.Glyphs.audio.cycleVoice      = cycleVoice;
+      window.Glyphs.audio.isKnownWord     = isKnownWord;
+      window.Glyphs.audio.play            = play;
+      window.Glyphs.audio.playDeflate     = playDeflate;
+      window.Glyphs.audio.playLetterName  = playLetterName;
+      window.Glyphs.audio.playLetterSound = playLetterSound;
+      window.Glyphs.audio.playHmm         = playHmm;
+      window.Glyphs.audio.playPhonemes    = playPhonemes;
+      window.Glyphs.audio.spellWord       = spellWord;
 
       /* Seed the current-voice index to point at the manifest primary. */
       var v = voices();

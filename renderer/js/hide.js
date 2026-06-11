@@ -229,6 +229,22 @@
 
       function audio() { return window.Glyphs.audio || null; }
 
+      /* announceLetter(letter) — policy-driven letter announcement.
+         speak mode → playLetterSound (the phonemic clip, /k/ not "see")
+         spell mode → playLetterName  (the letter name, "see")
+         Read mode.current() at call time so a hub mode-switch takes
+         effect instantly with no stale state here.                    */
+      function announceLetter(letter) {
+        var a = audio();
+        if (!a) return;
+        var m = window.Glyphs.mode ? window.Glyphs.mode.current() : 'speak';
+        if (m === 'spell') {
+          if (a.playLetterName) a.playLetterName(letter);
+        } else {
+          if (a.playLetterSound) a.playLetterSound(letter);
+        }
+      }
+
       /* ── Grid geometry ─────────────────────────────────────── */
 
       function buildGrid(letter) {
@@ -430,10 +446,9 @@
           c.el.style.opacity = '0';   /* ghost dots just fade        */
         }
 
-        /* Let the arpeggio lead, then the letter's name.           */
+        /* Let the arpeggio lead, then the mode-appropriate letter clip. */
         later(function () {
-          var a = audio();
-          if (a && a.playLetterName) a.playLetterName(star.ch);
+          announceLetter(star.ch);
         }, 250);
 
         later(function () {
@@ -569,8 +584,7 @@
           if (speedImps[i].ch === ch) { catchImp(speedImps[i]); got = true; }
         }
         if (got) {
-          var a = audio();
-          if (a && a.playLetterName) a.playLetterName(ch);
+          announceLetter(ch);
         } else {
           sfxClick();
           pulseRandom(1);
@@ -816,8 +830,7 @@
           if (best) {
             var ch = best.ch;
             catchImp(best);
-            var a = audio();
-            if (a && a.playLetterName) a.playLetterName(ch);
+            announceLetter(ch);
             return;
           }
           softClickAt(x, y);

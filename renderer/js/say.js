@@ -333,23 +333,49 @@
           later(newWord, NEW_WORD_MS);
         }
 
-        /* Let the glow land, then the machine says the word — the
-           pre-rendered clip, the only speech in this world.        */
-        later(function () {
-          if (tok !== _token) return;
-          var audio = window.Glyphs.audio;
-          if (audio && audio.play) {
-            audio.play(word, {
-              onDone: function () {
-                if (tok !== _token || !active) return;
-                later(advance, CELEBRATE_BEAT);
-              },
-            });
-          }
-        }, CELEBRATE_CLIP_MS);
+        /* Read mode at the moment of completion — no cached copy. */
+        var celebMode = (window.Glyphs.mode ? window.Glyphs.mode.current() : 'speak');
 
-        /* Safety net: never stall if the clip is missing/never ends. */
-        later(advance, 4500);
+        if (celebMode === 'spell') {
+          /* Spell mode: spell the word by letter names, no word clip after.
+             The spelling IS the celebration — the bee structure commits here. */
+          later(function () {
+            if (tok !== _token) return;
+            var audio = window.Glyphs.audio;
+            if (audio && audio.spellWord) {
+              audio.spellWord(word, {
+                onDone: function () {
+                  if (tok !== _token || !active) return;
+                  later(advance, CELEBRATE_BEAT);
+                },
+              });
+            }
+          }, CELEBRATE_CLIP_MS);
+
+          /* Safety net: longer timeout in spell mode — letter-name spelling
+             of a longer word can take ~700ms per letter; without scaling the
+             net would cut the spelling off mid-word.
+             Base 4500ms + 800ms per letter guarantees the net fires after
+             the longest plausible spellWord completes.                      */
+          later(advance, 4500 + word.length * 800);
+        } else {
+          /* Speak mode (default): play the word clip, then advance. */
+          later(function () {
+            if (tok !== _token) return;
+            var audio = window.Glyphs.audio;
+            if (audio && audio.play) {
+              audio.play(word, {
+                onDone: function () {
+                  if (tok !== _token || !active) return;
+                  later(advance, CELEBRATE_BEAT);
+                },
+              });
+            }
+          }, CELEBRATE_CLIP_MS);
+
+          /* Safety net: never stall if the clip is missing/never ends. */
+          later(advance, 4500);
+        }
       }
 
       /* ── Input ─────────────────────────────────────────────── */

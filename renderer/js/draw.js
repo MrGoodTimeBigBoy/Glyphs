@@ -92,6 +92,8 @@
     b: '#4488ff', i: '#7755ff', v: '#cc66ff',
     /* the hidden tier: live but not shown in the palette */
     c: '#33ffee', m: '#ff44cc', w: '#f5f5f5',
+    /* phosphor: resolved live so it matches the current mode */
+    phosphor: null,
   };
   var SHOWN = ['r', 'o', 'y', 'g', 'b', 'i', 'v'];
   var COLOR_ORDER = 'roygbivcmw';   /* index → the per-color select note */
@@ -223,7 +225,7 @@
       var heading  = 0;       /* degrees; 0 = up, clockwise           */
       var sizeIdx  = 0;       /* index into SIZES                     */
       var widthIdx = 0;       /* index into WIDTHS                    */
-      var colorKey = 'g';     /* starts phosphor green                */
+      var colorKey = 'phosphor'; /* starts in the live phosphor color  */
       var rainbow  = false;
       var hue      = 110;     /* rainbow hue, advanced by distance    */
       var paletteOpen = false;
@@ -312,8 +314,9 @@
       }
 
       function trailColor() {
-        return rainbow ? 'hsl(' + Math.round(hue) + ', 100%, 62%)'
-                       : COLORS[colorKey];
+        if (rainbow) return 'hsl(' + Math.round(hue) + ', 100%, 62%)';
+        if (colorKey === 'phosphor') return window.Glyphs.palette.get('bright');
+        return COLORS[colorKey];
       }
 
       /* tracePath(pts) — render a polyline of local points, advance
@@ -750,9 +753,10 @@
         ctx.clearRect(0, 0, x, ch);
         if (t < 1) {
           /* The bright leading edge — erased by the next frame.    */
+          var wipeCol = window.Glyphs.palette.get('bright');
           ctx.globalAlpha = 0.55;
-          ctx.strokeStyle = '#33ff33';
-          ctx.shadowColor = '#33ff33';
+          ctx.strokeStyle = wipeCol;
+          ctx.shadowColor = wipeCol;
           ctx.shadowBlur = 8;
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -775,9 +779,12 @@
           swatchEl.style.background = '';
           swatchEl.style.boxShadow = '';
         } else {
+          var swatchCol = colorKey === 'phosphor'
+            ? window.Glyphs.palette.get('bright')
+            : COLORS[colorKey];
           swatchEl.classList.remove('rainbow');
-          swatchEl.style.background = COLORS[colorKey];
-          swatchEl.style.boxShadow = '0 0 10px ' + COLORS[colorKey];
+          swatchEl.style.background = swatchCol;
+          swatchEl.style.boxShadow = '0 0 10px ' + swatchCol;
         }
       }
 

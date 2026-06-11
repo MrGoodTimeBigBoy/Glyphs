@@ -135,8 +135,20 @@ manifest).
 ## Prerequisites
 
 1. **Python 3** — standard library only, no `pip install` required.
-2. **`OPENROUTER_API_KEY`** environment variable — an OpenRouter API key
-   (get one at https://openrouter.ai/settings/keys).
+2. **An OpenRouter API key** (get one at
+   https://openrouter.ai/settings/keys), provided either way:
+   - `OPENROUTER_API_KEY` environment variable, or
+   - the **macOS Keychain** (preferred — nothing secret ever sits in the
+     repo tree, so nothing can leak into a public repo). Store it once:
+
+     ```sh
+     security add-generic-password -a "$USER" -s OPENROUTER_API_KEY \
+         -w 'sk-or-v1-…' -U
+     ```
+
+     The generator checks the environment first, then the Keychain
+     (service name = env var name). Same scheme works for
+     `GEMINI_API_KEY` on the fallback route.
 3. **Network access to `openrouter.ai`** at generation time (clips are
    generated once and committed; the app itself is fully offline).
 
@@ -291,6 +303,8 @@ renderer/audio/
       a.wav  b.wav  … z.wav       # phonetic sounds ("ah", "buh", …)
     letters-name/
       a.wav  b.wav  … z.wav       # letter names ("ay", "bee", …)
+    phonemes/
+      aa.wav  ae.wav  … zh.wav    # 39 ARPABET phonemes (American English)
     hmm.wav
     deflate.wav
   sulafat/                        # comparison voice, subset only
@@ -300,6 +314,30 @@ renderer/audio/
     deflate.wav
   aoede/
     … (same subset as sulafat)
+```
+
+### Phoneme clips (`phonemes/`)
+
+The 39 ARPABET phonemes of American English, generated for the primary
+voice only. These are optimised for concatenation: after the standard
+tail conditioning, each clip gets:
+
+1. **Leading/trailing silence trim** (energy threshold
+   `PHONEME_ENERGY_THRESHOLD`) with a short head/tail pad to preserve
+   the attack transient.
+2. **Fade-in** (`PHONEME_FADE_IN_MS`) and **fade-out**
+   (`PHONEME_FADE_OUT_MS`) to eliminate clicks at splice points.
+3. **RMS normalisation** to `PHONEME_RMS_TARGET` so no phoneme jumps
+   out of a concatenated sequence.
+
+All five constants are in `generate_clips.py` and are labelled
+ear-tuning candidates.  Iterate after the first render:
+
+```sh
+export OPENROUTER_API_KEY=sk-or-v1-...
+python3 tools/tts/generate_clips.py --primary-only --force
+python3 tools/tts/test_phonemes.py cat dog ship fish sun chop
+# A/B tmp/phoneme-test/<word>.wav vs <word>_reference.wav
 ```
 
 ---
