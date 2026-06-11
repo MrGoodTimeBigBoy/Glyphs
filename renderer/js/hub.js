@@ -26,7 +26,11 @@
 (function () {
   'use strict';
 
-  var KEYWORDS    = ['hide', 'draw', 'find', 'say'];
+  var KEYWORDS    = ['hide', 'draw', 'find', 'say', 'speak', 'spell'];
+
+  /* SPEAK phonemes — hardcoded, never sent through G2P.
+     ARPABET: S P IY K                                    */
+  var SPEAK_PHONEMES = ['S', 'P', 'IY', 'K'];
   var HISTORY_CAP = 500;
   /* Soft cap on the buffer so mashing can't push the line off-screen.
      Extra keys are absorbed silently — never punished, never leaked.  */
@@ -98,6 +102,21 @@
 
         var g = live ? ghostKeyword() : null;
         ghostEl.textContent = g ? g.slice(buffer.length) : '';
+
+        /* Target-mode preview: if the buffer is exactly the OTHER mode's
+           keyword (not the current mode), color the text in that mode's
+           bright hue — a preview of where Enter leads. Remove both classes
+           first, then apply the target one only when appropriate.        */
+        textEl.classList.remove('hub-preview-speak', 'hub-preview-spell');
+        if (live && buffer) {
+          var mode = window.Glyphs.mode;
+          var currentMode = mode ? mode.current() : 'speak';
+          if (buffer === 'speak' && currentMode !== 'speak') {
+            textEl.classList.add('hub-preview-speak');
+          } else if (buffer === 'spell' && currentMode !== 'spell') {
+            textEl.classList.add('hub-preview-spell');
+          }
+        }
 
         /* Alternatives list — only when more than one keyword matches. */
         var m = live ? keywordMatches() : [];
@@ -182,7 +201,34 @@
         altIndex = 0;
         litSpans = null;
 
-        /* 1. Exact keyword → enter that world. No history entry. */
+        /* 1a. Mode keywords (speak / spell) — stay in the hub. No history. */
+        if (word === 'speak' || word === 'spell') {
+          var mode = window.Glyphs.mode;
+          if (mode && mode.current() === word) {
+            /* Already in that mode: absorbed quietly. */
+            var tones = window.Glyphs.tones;
+            if (tones && tones.tick) tones.tick();
+          } else {
+            /* Switch mode, then play the double-utterance. */
+            if (mode) mode.set(word);
+            var modeAudio = window.Glyphs.audio;
+            if (modeAudio) {
+              if (word === 'spell') {
+                /* Spell the word SPELL by letter names. */
+                modeAudio.spellWord('spell');
+              } else {
+                /* Pronounce SPEAK by phonemes: S P IY K.
+                   Constant defined at the top of this module. */
+                modeAudio.playPhonemes(SPEAK_PHONEMES);
+              }
+            }
+          }
+          renderInput();
+          renderHistory();
+          return;
+        }
+
+        /* 1b. World keywords → enter that world. No history entry. */
         for (var i = 0; i < KEYWORDS.length; i++) {
           if (KEYWORDS[i] === word) {
             renderInput();

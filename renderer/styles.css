@@ -12,6 +12,14 @@
   --ph-ghost:      #0f4f0f;
   --ph-neutral:    #9a9a9a;
   --ph-bright-rgb: 51, 255, 51;
+
+  /* Mode-independent bright values — used by the target-mode preview
+     (hub-preview-speak / hub-preview-spell) and any future cross-mode
+     comparisons. These never change with the active mode.             */
+  --ph-speak-bright:     #33ff33;
+  --ph-speak-bright-rgb: 51, 255, 51;
+  --ph-spell-bright:     #ffb000;
+  --ph-spell-bright-rgb: 255, 176, 0;
 }
 
 body.mode-speak {
@@ -34,6 +42,39 @@ body.mode-spell {
   --ph-ghost:      #4f3700;
   --ph-neutral:    #9a9a9a;
   --ph-bright-rgb: 255, 176, 0;
+}
+
+/* ── Mode transition (mode.js adds/removes this class for ~600 ms) ── */
+/* Applies a short ease to color-bearing properties across all elements
+   so the palette swap feels smooth, not instant. The class is removed
+   after 600 ms so ongoing keyframe animations are not permanently
+   damped — CSS transitions lose to animations, so this is safe, but
+   removing it keeps future animation additions straightforward.       */
+
+body.mode-flux,
+body.mode-flux * {
+  transition:
+    color          0.45s ease,
+    background-color 0.45s ease,
+    border-color   0.45s ease,
+    box-shadow     0.45s ease,
+    text-shadow    0.45s ease;
+}
+
+/* ── Hub target-mode preview coloring ───────────────────────────── */
+/* When the child has typed exactly the OTHER mode's keyword, the live
+   input text previews in that mode's bright color — a hint of where
+   Enter leads. Only the typed text changes; the cursor keeps its own
+   color from .cursor (unchanged).                                    */
+
+.hub-text.hub-preview-speak {
+  color: var(--ph-speak-bright);
+  text-shadow: 0 0 8px rgba(var(--ph-speak-bright-rgb), 0.55);
+}
+
+.hub-text.hub-preview-spell {
+  color: var(--ph-spell-bright);
+  text-shadow: 0 0 8px rgba(var(--ph-spell-bright-rgb), 0.55);
 }
 
 /* ── reset & base ───────────────────────────────────────────────── */

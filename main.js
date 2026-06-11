@@ -87,6 +87,41 @@ ipcMain.handle('glyphs:history-save', (event, entries) => {
   }
 });
 
+// ── Mode persistence (speak / spell) ────────────────────────────────────────
+// JSON file in userData; atomic write (tmp + rename). Neither handler ever
+// throws to the renderer: load resolves 'speak' and save resolves
+// { ok: false } on any failure.
+
+function modePath() {
+  return path.join(app.getPath('userData'), 'mode.json');
+}
+
+function sanitizeMode(m) {
+  return (m === 'speak' || m === 'spell') ? m : 'speak';
+}
+
+ipcMain.handle('glyphs:mode-load', () => {
+  try {
+    const raw = JSON.parse(fs.readFileSync(modePath(), 'utf8'));
+    return sanitizeMode(raw && raw.mode);
+  } catch (err) {
+    return 'speak'; // missing file, bad JSON, unreadable disk — default
+  }
+});
+
+ipcMain.handle('glyphs:mode-save', (event, mode) => {
+  try {
+    const safeMode = sanitizeMode(mode);
+    const file = modePath();
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ mode: safeMode }));
+    fs.renameSync(tmp, file); // atomic on the same filesystem
+    return { ok: true };
+  } catch (err) {
+    return { ok: false };
+  }
+});
+
 // Single-window kiosk: quit on all platforms when the window is closed.
 // No macOS "linger with no windows" behaviour.
 app.on('window-all-closed', () => app.quit());
