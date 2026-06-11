@@ -3,11 +3,14 @@
    audio/manifest.js; does not overwrite it).
 
    RULE: this file must NEVER reference window.speechSynthesis or
-   SpeechSynthesisUtterance. Unknown words are sounded out from pre-rendered
-   clips only — "hmm" + per-letter phonemic clips in the current voice.
+   SpeechSynthesisUtterance. Everything is pre-rendered clips. Unknown
+   words are handled by hub.js via G2P + playPhonemes (speak mode) or
+   spellWord (spell mode) — never directly by this engine; play() itself
+   speaks known words only.
 
    Clip path layout (relative to the renderer page):
      word clip        audio/<voice>/words/<word>.<ext>
+     phoneme clip     audio/<voice>/phonemes/<arpabet>.<ext>
      phonemic letter  audio/<voice>/letters-phonemic/<letter>.<ext>
      letter name      audio/<voice>/letters-name/<letter>.<ext>
      hmm              audio/<voice>/hmm.<ext>

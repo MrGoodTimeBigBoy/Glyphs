@@ -36,7 +36,7 @@ The app has two global modes. Mode is set from the hub with first-class keywords
 
 Pressing Enter switches mode with a short whole-app color ease (the `mode-flux` transition, ~600 ms). Then comes the app's only deliberate double-utterance, and it is not flourish — it's pedagogy. Entering spell, the machine spells "SPELL" by letter names. Entering speak, it pronounces "SPEAK" by phonemes (S P IY K). The keyword names the mode; the machine's delivery demonstrates what that mode sounds like. One announcement, one demonstration, immediate.
 
-Typing the keyword you are already in is a recognized no-op. Nothing announces, nothing changes — the word doesn't stand out in the input line or the history. The machine has heard you; it already knows.
+Typing the keyword you are already in is a recognized no-op. Nothing announces, nothing changes — the word doesn't stand out in the input line or the history. The machine acknowledges with its near-silent tick (the mashing-is-absorbed convention: every keypress produces *some* response) and that's all. It has heard you; it already knows.
 
 ### Color identity
 
@@ -52,13 +52,15 @@ The home screen is the soul of the app. It is a mostly-empty terminal: black bac
 
 Four kinds of input get four kinds of response:
 
-1. **A mode keyword** (`speak` or `spell`): switches the global mode, plays the double-utterance announcement, no history entry. Already in that mode: silent no-op.
+1. **A mode keyword** (`speak` or `spell`): switches the global mode, plays the double-utterance announcement, no history entry. Already in that mode: a recognized no-op — just the near-silent tick.
 
 2. **A world keyword** (`hide`, `draw`, `find`, `say`): opens a world. The screen transitions and the child enters a different mode of play. ESC always returns to the hub.
 
 3. **A real word** that the machine knows how to say: in speak mode the machine pronounces it; in spell mode the machine spells it by letter names and then pronounces it (bee structure). The word appears in the history. Certain decorated words also trigger a small visual flourish (an ASCII cat walks across the bottom, a sun rises and sets, etc.) — these are not announced or listed; the child discovers them. Decorated-word flourishes are visual and mode-independent.
 
 4. **A word the machine doesn't know**: in speak mode, the machine says "hmm" and resolves the word to its true ARPABET phonemes via the G2P pipeline, then plays them one by one from the phoneme clip library. In spell mode, the machine spells it by letter names. There is no fallback synth voice, in either mode. The old behavior — sounding out unknown words grapheme by grapheme — was wrong phonics: `shop` came out /s//h//o//p/ instead of /ʃ//ɒ//p/. The phoneme path corrects that.
+
+Input that isn't a word at all — empty, or containing non-letters — gets the soft deflate sound and a cursor wiggle, and leaves no history entry. Not a failure state; a small amused shrug.
 
 ### Autocomplete
 
