@@ -115,9 +115,22 @@ async function main() {
   console.log('\n── Tier 3: fm (Apple Foundation Models) ──');
   process.env.GLYPHS_PHONICS_TIER = 'llm';
 
-  // "blorf" is a made-up word that fm handles reliably (tested: 3/3 consistent).
+  // The on-device model is nondeterministic: an occasional sample fails the
+  // strict 39-symbol validation and g2p() returns null (in the real app the
+  // tiered pipeline just falls through).  Forced-llm tests therefore retry —
+  // we are testing "the tier works", not "every sample validates".
+  async function g2pLlmWithRetry(word, attempts) {
+    for (let i = 0; i < attempts; i++) {
+      const r = await g2p(word);
+      if (r !== null) return r;
+      console.log('  (retry ' + (i + 1) + ': fm sample failed validation for "' + word + '")');
+    }
+    return null;
+  }
+
+  // "blorf" is a made-up word that fm handles reliably.
   const t0_blorf = Date.now();
-  const blorf_fm = await g2p('blorf');
+  const blorf_fm = await g2pLlmWithRetry('blorf', 3);
   const ms_blorf = Date.now() - t0_blorf;
   ok('llm: "blorf" resolves', blorf_fm !== null && blorf_fm.tier === 'llm');
   ok('llm: blorf phonemes are valid', blorf_fm && validatePhonemes(blorf_fm.phonemes));
@@ -126,7 +139,7 @@ async function main() {
 
   // "finger" is a known word that fm handles correctly.
   const t0_finger = Date.now();
-  const finger_fm = await g2p('finger');
+  const finger_fm = await g2pLlmWithRetry('finger', 3);
   const ms_finger = Date.now() - t0_finger;
   ok('llm: "finger" resolves', finger_fm !== null && finger_fm.tier === 'llm');
   ok('llm: finger phonemes are valid', finger_fm && validatePhonemes(finger_fm.phonemes));
