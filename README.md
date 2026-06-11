@@ -1,6 +1,6 @@
 # Glyphs
 
-A cozy, curious keyboard playground for an early reader, in a CRT-terminal shell: phosphor green on black, warm and slow. See `DESIGN.md` for the why, `ROADMAP.md` for the build order. This is Phase 1: the Electron shell and its containment — a black screen, a blinking cursor, and a cage that works.
+A cozy, curious keyboard playground for an early reader, in a CRT-terminal shell: phosphor green on black (or amber — see spell mode), warm and slow. See `DESIGN.md` for the why, `ROADMAP.md` for the build order. All four worlds (`hide`, `draw`, `find`, `say`), the hub, and the two global modes (`speak` phonics / `spell` spelling-bee) are live; this README covers the shell, the containment cage, and the developer workflows.
 
 ## Setup
 
@@ -10,7 +10,7 @@ Requires Node 22+ and npm.
 npm install
 ```
 
-Electron is the only dependency.
+Runtime dependencies: `electron` and `espeak-ng` (a WASM port — tier 2 of the G2P pipeline; no system binary needed).
 
 ## Running
 
@@ -71,4 +71,15 @@ Then add it to `renderer/index.html` **after** `namespace.js` and **before** `bo
 <script src="js/boot.js"></script>
 ```
 
-`boot.js` calls every registered module's `init()` in registration order once the DOM is ready. Anything that needs main-process powers goes through `preload.js` via `contextBridge` (currently exposes only a frozen `window.GlyphsHost.platform`).
+`boot.js` calls every registered module's `init()` in registration order once the DOM is ready. Anything that needs main-process powers goes through `preload.js` via `contextBridge` — the frozen `window.GlyphsHost` surface: `platform`, `loadHistory()`/`saveHistory()`, `loadMode()`/`saveMode()`, and `g2p(word)` (the grapheme-to-phoneme pipeline; see `g2p/README.md`).
+
+## Audio assets and pipelines
+
+Speech is pre-rendered TTS, committed to the repo (the app is fully offline at runtime). See `tools/tts/README.md` for generation, verification, and the ear-tuning workflow; `g2p/README.md` for the unknown-word phoneme pipeline.
+
+```sh
+npm run gen-clips        # generate any missing clips (needs API key — env or Keychain)
+npm run verify-clips     # check the clip tree against the manifest and format contract
+npm run test-g2p         # exercise all three G2P tiers (CMU → eSpeak NG → fm)
+npm run test-phonemes    # render concatenated phoneme words for A/B listening
+```

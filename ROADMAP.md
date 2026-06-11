@@ -183,13 +183,7 @@ This phase corrects an existing defect — unknown words were sounded out graphe
 - `hide`, `say`, and `find` behave per the cross-world policy above.
 - Palette swaps cleanly on mode change; all four worlds update.
 
-**One outstanding asset job:** the 39 phoneme clips have not yet been rendered — the tooling is complete but generation requires the API key. Run:
-
-```sh
-npm run gen-clips -- --primary-only
-```
-
-Then iterate by ear with `npm run test-phonemes -- cat dog ship fish sun chop` (A/B `tmp/phoneme-test/<word>.wav` against the pre-rendered word clips). See `tools/tts/README.md` for the full conditioning workflow.
+**Asset status:** all 39 phoneme clips are rendered and committed (`verify_clips.py` passes clean, 833/833). The remaining work is an ear-tuning pass — some clips run long, especially the vowels. Iterate with `npm run test-phonemes -- cat dog ship fish sun chop` (A/B `tmp/phoneme-test/<word>.wav` against the pre-rendered word clips), adjust the `PHONEME_MAP` spelling or the conditioning constants, delete the offending clip, and re-run the generator to re-render just that one. See `tools/tts/README.md` for the full workflow.
 
 -----
 
