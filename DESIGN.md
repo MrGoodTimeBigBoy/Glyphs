@@ -14,11 +14,35 @@ It is not an educational app in the way that phrase is usually meant. It teaches
 
 **Every key has a personality.** Across the app, letters should feel like distinct things, not interchangeable inputs. A child who plays Glyphs for a week should be able to tell you something about what `s` does, what `r` does, what happens when you hold shift. This is the legibility principle: the machine is consistent and specific, and consistency is what lets a kid form a real relationship with it.
 
+A letter's musical **tone** is its body — fixed, mode-independent, the same note whether the app is green or amber. The voice (a phoneme or a letter name) is its **costume**, dressing the body differently in speak and spell modes. The distinction matters: tones carry across both modes without contradiction, while the voice is an honest signal of which way the machine is approaching the word right now.
+
 **No failure states.** Glyphs has no losing. No game-over screens, no red X marks, no "try again." A wrong input either does nothing, does something small and amusing, or just doesn't register. The machine is patient. The child sets the pace.
 
-**Reading by exposure, not by drill.** The machine reads aloud, sounds out unknown words letter by letter, and decorates certain words with small flourishes. None of this is framed as practice. It's just what the machine does. Reading happens as a side effect of play.
+**Reading by exposure, not by drill.** The machine reads aloud, resolves unknown words to their true phonemes, and decorates certain words with small flourishes. None of this is framed as practice. It's just what the machine does. Reading happens as a side effect of play.
 
 **The machine has a voice but isn't a character.** Glyphs talks — it reads words aloud, it announces things — but it doesn't have a face, a name, or a personality in the chatbot sense. It's more like a friendly room than a friendly creature. Scripted dialogue trees were considered and rejected as a trap: either you build a real conversational agent (out of scope) or you ship something thin that a child sees through immediately.
+
+## Speak and spell modes
+
+The app has two global modes. Mode is set from the hub with first-class keywords, persisted across launches in `userData/mode.json`, and defaults to `speak`.
+
+**Speak mode** is phonics. The CRT glows phosphor green — the default, the baseline. Known words play their pre-rendered word clip. Unknown words get the machine's honest attempt at the real pronunciation, via the G2P pipeline described in the Audio section.
+
+**Spell mode** is the spelling bee. The CRT turns amber — same machine, same scanlines, same cursor, second costume. Every typed word is spelled aloud by letter name: `cat` comes out "see ay tee." Known words then get the word clip played after the spelling (spell it, then hear it — the bee structure). Unknown words: the spelling stands alone, because letter names are always true of the word, and that's enough.
+
+### Typing the mode keywords
+
+`speak` and `spell` live in the autocomplete vocabulary alongside the world keywords. Typing either one fully shows a preview: the live text in the input line switches to that mode's bright color before you press Enter — phosphor green for `speak`, amber for `spell` — so the child can see where they're headed before committing.
+
+Pressing Enter switches mode with a short whole-app color ease (the `mode-flux` transition, ~600 ms). Then comes the app's only deliberate double-utterance, and it is not flourish — it's pedagogy. Entering spell, the machine spells "SPELL" by letter names. Entering speak, it pronounces "SPEAK" by phonemes (S P IY K). The keyword names the mode; the machine's delivery demonstrates what that mode sounds like. One announcement, one demonstration, immediate.
+
+Typing the keyword you are already in is a recognized no-op. Nothing announces, nothing changes — the word doesn't stand out in the input line or the history. The machine has heard you; it already knows.
+
+### Color identity
+
+All colors flow through a mode-keyed palette of CSS custom properties (`--ph-bright`, `--ph-mid`, `--ph-dim`, `--ph-faint`, `--ph-ghost`, `--ph-bright-rgb`, and so on) set on `body.mode-speak` and `body.mode-spell`. The amber ramp is brightness-matched to the green one so the two modes feel like peers rather than default and exception. Mode-independent bright values (`--ph-speak-bright`, `--ph-spell-bright`) are always defined at `:root` so the target-mode preview can use them regardless of which mode is active.
+
+The `draw` world's rainbow trail palette stays literal — real colors, not phosphor identity — but its default trail color and wipe flash follow the mode.
 
 ## The hub
 
@@ -26,13 +50,15 @@ The home screen is the soul of the app. It is a mostly-empty terminal: black bac
 
 ### Typing in the hub
 
-Three kinds of input get three kinds of response:
+Four kinds of input get four kinds of response:
 
-1. **A keyword** (`hide`, `draw`, `find`, and similar): opens a world. The screen transitions and the child enters a different mode of play. ESC always returns to the hub.
+1. **A mode keyword** (`speak` or `spell`): switches the global mode, plays the double-utterance announcement, no history entry. Already in that mode: silent no-op.
 
-2. **A real word** that the machine knows how to say: the machine pronounces it. The word appears in the history. Certain decorated words also trigger a small visual flourish (an ASCII cat walks across the bottom, a sun rises and sets, etc.) — these are not announced or listed; the child discovers them.
+2. **A world keyword** (`hide`, `draw`, `find`, `say`): opens a world. The screen transitions and the child enters a different mode of play. ESC always returns to the hub.
 
-3. **A word the machine doesn't know**: the machine says "hmm" and sounds out the letters one at a time. C-A-T. This is the unknown-word path; there is no fallback synth voice. Phonics-as-feature, not robot TTS as a stopgap.
+3. **A real word** that the machine knows how to say: in speak mode the machine pronounces it; in spell mode the machine spells it by letter names and then pronounces it (bee structure). The word appears in the history. Certain decorated words also trigger a small visual flourish (an ASCII cat walks across the bottom, a sun rises and sets, etc.) — these are not announced or listed; the child discovers them. Decorated-word flourishes are visual and mode-independent.
+
+4. **A word the machine doesn't know**: in speak mode, the machine says "hmm" and resolves the word to its true ARPABET phonemes via the G2P pipeline, then plays them one by one from the phoneme clip library. In spell mode, the machine spells it by letter names. There is no fallback synth voice, in either mode. The old behavior — sounding out unknown words grapheme by grapheme — was wrong phonics: `shop` came out /s//h//o//p/ instead of /ʃ//ɒ//p/. The phoneme path corrects that.
 
 ### Autocomplete
 
@@ -52,13 +78,39 @@ The active input line has the blinking cursor. Recalled and historical entries a
 
 ### Strategy
 
-Most words the child types will be drawn from a known set: kindergarten and first-grade sight words, common nouns (animals, family, colors, foods, weather, household objects), and morphological variations (cat/cats, run/running/ran). These are **pre-rendered TTS clips** using a high-quality voice (Google Wavenet or similar). Estimated 600–800 clips, ~20–25MB bundled with the app. (As built: Gemini TTS, `callirrhoe` voice, 720 words plus letter names, phonemic letters, and interjections — WAV for now, so the bundle runs ~60MB; conversion to a compressed format is an easy later win.)
+Most words the child types will be drawn from a known set: kindergarten and first-grade sight words, common nouns (animals, family, colors, foods, weather, household objects), and morphological variations (cat/cats, run/running/ran). These are **pre-rendered TTS clips** using the Gemini Flash TTS pipeline, `callirrhoe` voice — 720 words plus the letter sets and interjections, WAV throughout; conversion to a compressed format is an easy later win.
 
-Unknown words **do not** fall back to browser TTS. Instead, the machine says "hmm" and sounds out the letters individually using pre-rendered letter sounds. This is more useful for an early reader than hearing a synthesized voice mangle pronunciation, and it preserves the warmth of the known-words case.
+Unknown words **do not** fall back to browser TTS. Instead, the machine says "hmm" and resolves the word to its true phonemes using the G2P pipeline, then plays those phonemes from the pre-rendered phoneme library. In spell mode, it spells by letter names. Either way the child hears the same warm voice — no robot, no synthesis engine speaking live.
+
+### G2P: the three-tier pipeline
+
+When the hub encounters an unknown word in speak mode, it starts two things concurrently: the `hmm` clip, and a G2P (grapheme-to-phoneme) request via IPC to the main process. The hmm covers latency; phoneme playback begins once both are ready.
+
+The pipeline in `g2p/index.js` runs three tiers, each producing a complete ARPABET phoneme sequence:
+
+1. **CMU Pronouncing Dictionary** — bundled at `g2p/cmudict.dict`. Instant; covers the large majority of English words.
+2. **eSpeak NG WASM** — a bundled npm package; no install, no network, near-instant. Converts IPA output to ARPABET via a static mapping table. Agrees with CMU on about 90% of common words; handles inflections, compound words, and less-common vocabulary the dict doesn't carry.
+3. **`fm` CLI (Apple Foundation Models)** — the macOS `fm` command, an on-device LLM constrained by a JSON schema enumerating only the 39 valid ARPABET symbols. Takes roughly 10 seconds. This is the long tail: made-up words, proper nouns, nonsense strings. The hmm plus a beat of thinking silence covers the wait.
+
+If every tier fails, the fallback is `spellWord` — letter names are always true of the word, so the child still hears something honest.
+
+The pipeline never streams partial results: all three tiers produce a complete phoneme sequence or nothing, so streaming would buy nothing. Developer affordances: `GLYPHS_PHONICS_TIER=cmu|espeak|llm` forces a single tier; `GLYPHS_LOG_TIER=1` logs per-word tier resolution to stderr.
+
+### Audio libraries
+
+Three pre-rendered clip libraries live under `renderer/audio/callirrhoe/`:
+
+- **`words/`** — the full word bundle (720 words). Plays verbatim for known words in both modes.
+- **`letters-name/`** — 26 letter-name clips ("ay", "bee", "see" …). Used everywhere a letter name is needed: spell mode in the hub, `hide`'s found-impostor announcement in spell mode, `say`'s completion in spell mode, and the mode-announcement for entering spell ("SPELL" spelled by letter names).
+- **`phonemes/`** — 39 ARPABET clips, one per phoneme symbol. Plays when the G2P pipeline resolves an unknown word in speak mode, and to announce entering speak mode ("SPEAK" as S P IY K). These clips are optimised for concatenation: after the standard tail conditioning, each clip gets energy-threshold silence trimming, 5/25 ms fades to eliminate splice clicks, and RMS normalisation to a common target so no phoneme jumps out of a sequence. Per-phoneme-class playback gaps replace the flat letter gap: stops 30 ms, affricates 40 ms, vowels 60 ms, other continuants 50 ms. The constants (`PHONEME_ENERGY_THRESHOLD`, `PHONEME_FADE_IN_MS`, `PHONEME_FADE_OUT_MS`, `PHONEME_RMS_TARGET`) are in `generate_clips.py` and labelled ear-tuning candidates.
+
+The `letters-phonemic/` set (26 clips, one phonemic sound per letter) remains in the bundle for any direct playback needs but is no longer the unknown-word fallback.
+
+**Not yet rendered:** as of the speak/spell commit, the tooling for the phoneme library is complete but the 39 clips have not been generated — that requires the API key. Run `npm run gen-clips -- --primary-only`. The `tools/tts/test_phonemes.py` script concatenates CMU-known words from the new clips and lets you A/B them against the pre-rendered word clips by ear. Concatenated playback won't match co-articulated speech, but intelligibility is the bar, and the constants above are the knobs.
 
 ### Validation gate
 
-The audio approach is the project's biggest unknown. Before building the hub, the audio pipeline must be validated: a small harness generates ~20 sample words and the letter sounds, plays them in context, and the result is judged by ear. If the warmth isn't there, the strategy gets rethought before the rest of the app gets built on top of it.
+The audio approach was validated before building the hub: a small harness generated ~20 sample words and the letter sounds, played them in context, and Ian judged the result by ear. Passed 2026-06-10. Voice: Gemini TTS, `callirrhoe`. The sulafat/aoede comparison subsets remain frozen in the bundle until the bake-off is formally closed.
 
 ### Decorated words
 
@@ -66,11 +118,13 @@ A small set of words (8–12 for v1) trigger ASCII or pixel-art flourishes in ad
 
 ### Letter tones
 
-Every letter has a fixed musical tone, assigned once and used consistently across the entire app. The same tone for `c` plays when the hub sounds out `cat`, when the child presses `c` in `draw`, and when the machine spells a word containing `c` in `say`. This is the concrete implementation of the "every key has a personality" principle from the design philosophy — tone is part of what makes each letter a *distinct thing* rather than an interchangeable input.
+Every letter has a fixed musical tone, assigned once and used consistently across the entire app. The same tone for `c` plays when the child presses `c` in `draw`, when `say` spells a word containing `c`, and when `find` locks a caught `c` into its slot. This is the concrete implementation of the "every key has a personality" principle from the design philosophy — tone is part of what makes each letter a *distinct thing* rather than an interchangeable input.
+
+A tone is the letter's **body**: constant, mode-independent, the same pitch whether the CRT is green or amber. The voice (phoneme or letter name) is the letter's **costume**, changing with the mode. The body and the costume are independent; the tone always rings true regardless of which mode the machine is in.
 
 Tones are drawn from a major scale spanning a couple of octaves, one pitch per letter. The five vowels (A, E, I, O, U) sit at chord-tone scale degrees — root, third, fifth — so they ring with a clarity that stands them apart from the consonants. Words thereby become small melodies; the melodic pattern of a familiar word becomes another route to recognizing it.
 
-This is a small synth engine, not a pre-rendered asset — a few oscillators via the Web Audio API, held in a single shared module. Whether vowels also get a different timbre (fuller sine wave against triangle-wave consonants, say) is an open implementation call worth trying.
+This is a small synth engine, not a pre-rendered asset — a few oscillators via the Web Audio API, held in a single shared module.
 
 ## Worlds
 
@@ -82,7 +136,7 @@ Find it by clicking or by pressing the impostor's key. Mashing produces tiny vis
 
 The field gently breathes — a slow wave animation. After a few seconds, the impostor begins to drift out of phase with the rest of the wall. The drift accelerates over time, so finding the impostor gets easier the longer the child looks. This is the hint system: it's just time. No explicit help is ever offered.
 
-When found, the impostor grows, the rest of the field scatters or fades, the machine says the impostor letter aloud, and a new round begins.
+When found, the impostor grows, the rest of the field scatters or fades, the machine says the impostor letter aloud, and a new round begins. The announcement respects the global mode: in speak mode the machine plays the letter's phonemic sound clip; in spell mode it plays the letter's name.
 
 Difficulty is the field/impostor pairing. Visually distinct pairs first (`n`/`h`, `o`/`c`), similar pairs later (`n`/`m`, `o`/`e`, `c`/`e`). Drift starts at about 5 seconds and lengthens as rounds progress.
 
@@ -110,7 +164,9 @@ When a falling letter crosses the catch line, pressing its key locks it into its
 
 Catching a letter that's already locked produces a bonus chime. This means getting the same letter multiple times is rewarded, not punished.
 
-When all slots are filled, the word animates (it pulses, glows, or briefly transforms into its decorated-word art if it has one), and a new word begins.
+When all slots are filled, the word animates (it pulses, glows, or briefly transforms into its decorated-word art if it has one), the word clip plays, and a new word begins.
+
+`find` is **deliberately mode-agnostic.** Its unit is the sub-word letter, where the phoneme/letter-name distinction doesn't really apply. Each caught letter plays its musical **tone** — the letter's body, not its voice — and the completion word clip is identical in both modes. The world has a consistent musical identity regardless of whether the app is green or amber.
 
 **Difficulty progression.** Start with two-letter words, expand to three and four. Reuse sight words and decorated words from the hub vocabulary so the worlds reinforce each other. Distractor letters (letters not in the current word) appear in later levels; pressing their keys does nothing or produces a tiny dud sound.
 
@@ -118,7 +174,7 @@ When all slots are filled, the word animates (it pulses, glows, or briefly trans
 
 Simon Says for spelling. The machine spells a word at the child: each letter glows in sequence, large across the screen, and plays its musical tone. Then it's his turn — he types the word back, one letter at a time. Each correctly typed letter glows again and plays its tone, a quiet echo confirming the sequence is rebuilding. A wrong key plays a soft buzz and resets the sequence to the first letter of the current word — not a loss, just start that word again.
 
-When all letters are in, the full word glows brightly, the machine pronounces it aloud using the same pre-rendered clip the hub uses, and a new word appears.
+When all letters are in, the full word glows brightly, and the machine celebrates. In speak mode it pronounces the word aloud using the same pre-rendered clip the hub uses. In spell mode it spells the word by letter names — the bee structure commits here — and deliberately never plays the word clip; the spelling is the celebration. A new word appears after.
 
 **The musical layer.** Every letter has a consistent musical tone, assigned once and used everywhere (see Audio — Letter tones). During the show phase, the machine spells words as small melodies; during the input phase, typing each letter replays its tone. The musical consistency is what makes `say` work: a sufficiently engaged player starts to *hear* spelling — the melody of `cat` becomes as familiar as its shape.
 
@@ -155,7 +211,7 @@ This runs on a MacBook with a kindergartener at the controls. Containment matter
 The following were considered and explicitly cut:
 
 - **A `hi` keyword for conversation.** Scripted dialogue is too thin and real conversation requires an LLM, which is out of scope for cost and complexity reasons.
-- **Browser TTS fallback for unknown words.** Letter sounding-out is better pedagogy and a warmer experience.
+- **Browser TTS fallback for unknown words.** Phoneme sounding-out is better pedagogy and a warmer experience. The phoneme clips are the same warm voice as the word clips; there is no robot TTS anywhere in the experience.
 - **Pixel art assets in v1.** ASCII handles everything for v1. Pixel art is a possible later direction.
 - **Settings menu, parent controls, profiles.** One child, one machine, one experience.
 - **Real Logo grammar in `draw`.** Too much vocabulary for a kindergartener. Letter-by-letter associative response wins.
