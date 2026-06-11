@@ -9,7 +9,8 @@
     "dev": "electron . --dev",
     "test-audio": "electron . --dev --audio-test",
     "gen-clips": "python3 tools/tts/generate_clips.py",
-    "verify-clips": "python3 tools/tts/verify_clips.py"
+    "verify-clips": "python3 tools/tts/verify_clips.py",
+    "test-phonemes": "python3 tools/tts/test_phonemes.py"
   },
   "devDependencies": {
     "electron": "^42.4.0"

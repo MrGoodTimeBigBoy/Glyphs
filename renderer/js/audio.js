@@ -32,6 +32,28 @@
      Trimmed from 120 at the listening gate ("a shade long").         */
   var LETTER_GAP_MS = 100;
 
+  /* Gap between letter-names in spellWord(), in ms.
+     Letter names are full syllables ("see", "ay", "tee") — they need
+     more air than the phonemic letter-sound gap.  Ear-tune candidate. */
+  var LETTER_NAME_GAP_MS = 140;
+
+  /* Inter-phoneme gap table for playPhonemes(), in ms.
+     These are ear-tuning candidates — change here AND keep audio.js
+     and tools/tts/test_phonemes.py in lockstep.
+     Classes follow standard ARPABET articulatory groupings.          */
+  var PHONEME_GAPS = {
+    /* stops */
+    B: 30, D: 30, G: 30, K: 30, P: 30, T: 30,
+    /* affricates */
+    CH: 40, JH: 40,
+    /* vowels */
+    AA: 60, AE: 60, AH: 60, AO: 60, AW: 60, AY: 60,
+    EH: 60, ER: 60, EY: 60, IH: 60, IY: 60,
+    OW: 60, OY: 60, UH: 60, UW: 60,
+    /* default (fricatives / nasals / liquids / glides): 50 ms */
+  };
+  var PHONEME_GAP_DEFAULT_MS = 50;
+
   /* ── State ────────────────────────────────────────────────────── */
   var _currentVoiceIndex = 0;
   /* Monotonically increasing token; any in-progress sequence checks
@@ -109,11 +131,12 @@
   function clipUrl(kind, key) {
     var voice = voiceForClip(kind, key);
     var e = ext();
-    if (kind === 'word')   return 'audio/' + voice + '/words/' + key + '.' + e;
-    if (kind === 'letter') return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
+    if (kind === 'word')     return 'audio/' + voice + '/words/' + key + '.' + e;
+    if (kind === 'letter')   return 'audio/' + voice + '/letters-phonemic/' + key + '.' + e;
     if (kind === 'lettername') return 'audio/' + voice + '/letters-name/' + key + '.' + e;
-    if (kind === 'hmm')    return 'audio/' + voice + '/hmm.' + e;
-    if (kind === 'deflate') return 'audio/' + voice + '/deflate.' + e;
+    if (kind === 'phoneme')  return 'audio/' + primary() + '/phonemes/' + key.toLowerCase() + '.' + e;
+    if (kind === 'hmm')      return 'audio/' + voice + '/hmm.' + e;
+    if (kind === 'deflate')  return 'audio/' + voice + '/deflate.' + e;
     return null;
   }
 
@@ -202,11 +225,29 @@
     }
   }
 
+  /* gapForItem(item) — return the inter-item gap in ms.
+     0 = immediate advance (e.g. after hmm before the letter sequence). */
+  function gapForItem(item) {
+    if (item.kind === 'letter')     return LETTER_GAP_MS;
+    if (item.kind === 'lettername') return LETTER_NAME_GAP_MS;
+    if (item.kind === 'phoneme') {
+      var ph = (item.key || '').toUpperCase();
+      return (PHONEME_GAPS[ph] !== undefined) ? PHONEME_GAPS[ph] : PHONEME_GAP_DEFAULT_MS;
+    }
+    return 0;   /* hmm, word — no inter-item gap */
+  }
+
   /* playSequence(items, myToken, opts, idx)
      items: array of { kind, key } objects
-     Plays items[idx] then recurses, honouring LETTER_GAP_MS between
-     items. opts.onLetter(letter, idx) called before each letter item.
-     opts.onDone() called when the whole sequence completes.          */
+     Plays items[idx] then recurses, honouring per-kind gaps between
+     items.
+
+     Supported item kinds: 'letter', 'lettername', 'phoneme', 'hmm', 'word'.
+
+     Callback dispatch:
+       opts.onLetter(key, idx)   — before each 'letter' item
+       opts.onPhoneme(key, idx)  — before each 'phoneme' item
+       opts.onDone()             — when the whole sequence completes   */
   function playSequence(items, myToken, opts, idx) {
     if (myToken !== _seqToken) return;
     if (idx >= items.length) {
@@ -220,6 +261,9 @@
     if (opts.onLetter && item.kind === 'letter') {
       opts.onLetter(item.key, idx);
     }
+    if (opts.onPhoneme && item.kind === 'phoneme') {
+      opts.onPhoneme(item.key, idx);
+    }
 
     function advance() {
       if (myToken !== _seqToken) return;
@@ -228,11 +272,11 @@
         if (opts.onDone) opts.onDone();
         return;
       }
-      /* Small gap between letters; no gap after "hmm" (word clip). */
-      if (item.kind === 'letter') {
+      var gap = gapForItem(item);
+      if (gap > 0) {
         setTimeout(function () {
           playSequence(items, myToken, opts, next);
-        }, LETTER_GAP_MS);
+        }, gap);
       } else {
         playSequence(items, myToken, opts, next);
       }
@@ -279,6 +323,7 @@
       return { type: 'word' };
     }
 
+    /* legacy grapheme sound-out — replaced by G2P + playPhonemes; removed when hub is rewired */
     /* ── Unknown all-alpha word: hmm + phonemic letters ────────── */
     var letters = w.split('');
     var items = [{ kind: 'hmm', key: '' }];
@@ -287,6 +332,115 @@
     }
     playSequence(items, myToken, opts, 0);
     return { type: 'soundout', letters: letters };
+  }
+
+  /* ── playPhonemes(phonemes, opts) ────────────────────────────── */
+  /*
+     Speak mode: plays renderer/audio/callirrhoe/phonemes/<ph>.wav for
+     each ARPABET phoneme in the array, with per-class inter-phoneme
+     gaps (PHONEME_GAPS / PHONEME_GAP_DEFAULT_MS).
+
+     phonemes: array of ARPABET symbols e.g. ['SH', 'AA', 'P']
+               (case-normalised internally).
+
+     opts (all optional):
+       onPhoneme(ph, idx)  — called before each phoneme clip starts;
+                             ph is the normalised uppercase symbol,
+                             idx is its position in the array (0-based).
+       onDone()            — called when the last clip ends.
+
+     Reuses the shared playSequence machinery; supersedes any in-flight
+     audio.
+  */
+  function playPhonemes(phonemes, opts) {
+    opts = opts || {};
+    if (!phonemes || !phonemes.length) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    stopCurrent();
+    var myToken = _seqToken;
+    var items = [];
+    for (var i = 0; i < phonemes.length; i++) {
+      items.push({ kind: 'phoneme', key: (phonemes[i] || '').toUpperCase() });
+    }
+    playSequence(items, myToken, opts, 0);
+  }
+
+  /* ── spellWord(word, opts) ────────────────────────────────────── */
+  /*
+     Spell mode: plays the letter-name clip (letters-name/<letter>.wav)
+     for each a–z character of the word in order, with LETTER_NAME_GAP_MS
+     between each letter name.
+
+     Non a–z characters are silently skipped (spaces, digits, hyphens,
+     etc. — this keeps the function safe for any word the hub hands it).
+
+     opts (all optional):
+       onLetter(letter, idx)  — called before each letter-name clip;
+                                letter is the lowercase character,
+                                idx is its position in the original word
+                                (0-based, counting ALL characters including
+                                skipped ones) so callers can highlight the
+                                right position in a displayed word.
+       onDone()               — called when the last clip ends.
+  */
+  function spellWord(word, opts) {
+    opts = opts || {};
+    var w = (word || '').toLowerCase();
+    if (!w) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    stopCurrent();
+    var myToken = _seqToken;
+    var items = [];
+    for (var i = 0; i < w.length; i++) {
+      var ch = w[i];
+      if (/^[a-z]$/.test(ch)) {
+        /* Wrap the per-character index in a closure so onLetter reports
+           the position in the original word, not just the a–z subset.  */
+        items.push({ kind: 'lettername', key: ch, wordIdx: i });
+      }
+    }
+    if (!items.length) {
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+    /* Adapt opts: spellWord exposes onLetter(letter, wordIdx); playSequence
+       dispatches opts.onLetter(key, seqIdx).  We bridge with a wrapper.  */
+    var adaptedOpts = {
+      onDone: opts.onDone,
+    };
+    if (opts.onLetter) {
+      adaptedOpts.onLetter = function (key, seqIdx) {
+        /* seqIdx is position within items[]; items[seqIdx].wordIdx is
+           the position in the original word string.                    */
+        var wordIdx = (items[seqIdx] && items[seqIdx].wordIdx !== undefined)
+          ? items[seqIdx].wordIdx
+          : seqIdx;
+        opts.onLetter(key, wordIdx);
+      };
+    }
+    playSequence(items, myToken, adaptedOpts, 0);
+  }
+
+  /* ── playLetterSound(letter) — single phonemic letter clip ───── */
+  /*
+     Convenience wrapper: plays the phonemic letter clip for a single
+     a–z character from letters-phonemic/ (the same clip set that the
+     legacy unknown-word sound-out uses, now also callable directly).
+     Sibling of playLetterName.
+  */
+  function playLetterSound(letter) {
+    var l = (letter || '').toLowerCase();
+    if (!/^[a-z]$/.test(l)) return;
+    stopCurrent();
+    var myToken = _seqToken;
+    playUrl(clipUrl('letter', l), myToken,
+      function () { /* nothing more to do when it ends */ },
+      function () { /* missing clip — playUrl already warned */ }
+    );
   }
 
   /* ── playLetterName(letter) — single letter-name clip ────────── */
@@ -345,14 +499,17 @@
          the manifest data that manifest.js may have already set.    */
       window.Glyphs.audio = window.Glyphs.audio || {};
 
-      window.Glyphs.audio.getVoices      = voices;
+      window.Glyphs.audio.getVoices       = voices;
       window.Glyphs.audio.getCurrentVoice = currentVoice;
-      window.Glyphs.audio.cycleVoice     = cycleVoice;
-      window.Glyphs.audio.isKnownWord    = isKnownWord;
-      window.Glyphs.audio.play           = play;
-      window.Glyphs.audio.playDeflate    = playDeflate;
-      window.Glyphs.audio.playLetterName = playLetterName;
-      window.Glyphs.audio.playHmm        = playHmm;
+      window.Glyphs.audio.cycleVoice      = cycleVoice;
+      window.Glyphs.audio.isKnownWord     = isKnownWord;
+      window.Glyphs.audio.play            = play;
+      window.Glyphs.audio.playDeflate     = playDeflate;
+      window.Glyphs.audio.playLetterName  = playLetterName;
+      window.Glyphs.audio.playLetterSound = playLetterSound;
+      window.Glyphs.audio.playHmm         = playHmm;
+      window.Glyphs.audio.playPhonemes    = playPhonemes;
+      window.Glyphs.audio.spellWord       = spellWord;
 
       /* Seed the current-voice index to point at the manifest primary. */
       var v = voices();

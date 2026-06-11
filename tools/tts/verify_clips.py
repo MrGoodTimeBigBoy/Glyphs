@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-verify_clips.py — Glyphs Phase 3 clip-tree verifier (PHASE3-PLAN.md A4).
+verify_clips.py — Glyphs clip-tree verifier.
 
 Checks the generated audio bundle under renderer/audio/ against
 tools/tts/wordlist.txt and the pipeline's format contract:
 
   - the word list itself is well-formed (unique, lowercase a–z words);
   - every expected clip exists and is non-empty — primary voice: full
-    word set + 26 phonemic letters + 26 letter names + hmm + deflate;
-    bake-off voices: the frozen Phase 2 subsets + hmm + deflate;
+    word set + 26 phonemic letters + 26 letter names + 39 ARPABET phonemes
+    + hmm + deflate; bake-off voices: the frozen Phase 2 subsets + hmm + deflate;
   - every WAV is 24 kHz / mono / 16-bit;
-  - durations fall within 0.2–6.0 s (catches the empty-audio and
-    read-the-instructions-aloud failure modes);
+  - durations fall within the per-category limits:
+      word clips:    0.2–6.0 s
+      phoneme clips: 0.05–1.5 s  (phonemes are SHORT)
   - tails are actually silent — peak sample over the final 80 ms
     (catches missing tail conditioning);
   - manifest.js matches the word list (order preserved) and the voice
@@ -20,6 +21,13 @@ tools/tts/wordlist.txt and the pipeline's format contract:
 Every failure prints on its own line, followed by a per-voice summary.
 Exit status 0 only when fully clean; 1 otherwise.
 
+If phoneme clips have not yet been generated, missing phonemes are
+reported distinctly.  The exit status will be non-zero — that is correct
+behaviour until Ian generates the clips by running:
+
+    export OPENROUTER_API_KEY=sk-or-v1-...
+    python3 tools/tts/generate_clips.py --primary-only
+
 Standard library only: no pip install required.
 Runs unchanged on macOS and Linux.
 
@@ -27,6 +35,7 @@ Usage:
     python3 tools/tts/verify_clips.py            # full check
     python3 tools/tts/verify_clips.py --quick    # skip duration/tail scan
 """
+from __future__ import annotations
 
 import argparse
 import array
@@ -45,6 +54,7 @@ from generate_clips import (  # noqa: E402
     BAKEOFF_WORDS,
     CATEGORY_STYLES,
     LETTER_NAME_MAP,
+    PHONEME_SYMBOLS,
     PHONEMIC_MAP,
     PRIMARY_VOICE,
     parse_wordlist,
@@ -58,8 +68,13 @@ EXPECTED_RATE     = 24000   # Hz
 EXPECTED_CHANNELS = 1       # mono
 EXPECTED_WIDTH    = 2       # bytes per sample (16-bit)
 
+# Duration limits for standard clips (words, letters, interjections).
 MIN_SECONDS = 0.2           # below: the empty-audio failure mode
 MAX_SECONDS = 6.0           # above: the read-the-instructions failure mode
+
+# Duration limits for phoneme clips — phonemes are SHORT by design.
+PHONEME_MIN_SECONDS = 0.05  # below: almost certainly an empty-audio failure
+PHONEME_MAX_SECONDS = 1.5   # above: likely read-the-instructions or trailing silence
 
 TAIL_MS       = 80          # window to scan (== the generator's TAIL_PAD_MS)
 TAIL_PEAK_MAX = 327         # peak abs sample allowed in the tail (~1% FS)
@@ -78,6 +93,8 @@ def expected_files(words: list[str]) -> dict[str, list[str]]:
     paths = [f"{PRIMARY_VOICE}/words/{w}.wav" for w in words]
     paths += [f"{PRIMARY_VOICE}/letters-phonemic/{l}.wav" for l in PHONEMIC_MAP]
     paths += [f"{PRIMARY_VOICE}/letters-name/{l}.wav" for l in LETTER_NAME_MAP]
+    # 39 ARPABET phoneme clips (lowercase filenames).
+    paths += [f"{PRIMARY_VOICE}/phonemes/{ph.lower()}.wav" for ph in PHONEME_SYMBOLS]
     paths += [f"{PRIMARY_VOICE}/hmm.wav", f"{PRIMARY_VOICE}/deflate.wav"]
     expected[PRIMARY_VOICE] = paths
 
@@ -90,18 +107,35 @@ def expected_files(words: list[str]) -> dict[str, list[str]]:
 
     return expected
 
+
+def is_phoneme_path(rel_path: str) -> bool:
+    """Return True when rel_path is a phoneme clip (primary/phonemes/*.wav)."""
+    parts = pathlib.PurePosixPath(rel_path).parts
+    return len(parts) == 3 and parts[1] == "phonemes"
+
 # ---------------------------------------------------------------------------
 # Per-file checks
 # ---------------------------------------------------------------------------
 
-def check_clip(path: pathlib.Path, quick: bool) -> list[str]:
-    """Check one clip file; return a list of failure messages (empty = ok)."""
+def check_clip(path: pathlib.Path, quick: bool,
+               phoneme: bool = False) -> list[str]:
+    """Check one clip file; return a list of failure messages (empty = ok).
+
+    Args:
+        path:    Absolute path to the clip file.
+        quick:   Skip the per-sample duration/tail-silence scan.
+        phoneme: Use the phoneme-specific duration limits (0.05–1.5 s)
+                 instead of the standard word limits (0.2–6.0 s).
+    """
     if not path.exists():
         return ["missing"]
     if path.stat().st_size == 0:
         return ["empty file (0 bytes)"]
     if path.suffix != ".wav":
         return []  # only WAVs carry the format contract
+
+    min_s = PHONEME_MIN_SECONDS if phoneme else MIN_SECONDS
+    max_s = PHONEME_MAX_SECONDS if phoneme else MAX_SECONDS
 
     failures = []
     try:
@@ -120,10 +154,10 @@ def check_clip(path: pathlib.Path, quick: bool) -> list[str]:
                 return failures
 
             duration = n_frames / float(rate)
-            if not (MIN_SECONDS <= duration <= MAX_SECONDS):
+            if not (min_s <= duration <= max_s):
                 failures.append(
                     f"duration {duration:.2f}s outside "
-                    f"{MIN_SECONDS}–{MAX_SECONDS}s"
+                    f"{min_s}–{max_s}s"
                 )
 
             # Tail silence: peak abs sample over the final TAIL_MS.
@@ -271,12 +305,20 @@ def main(argv=None) -> int:
         ok = missing = bad = 0
         for rel in rel_paths:
             path = audio_dir / rel
-            clip_failures = check_clip(path, args.quick)
+            is_ph = is_phoneme_path(rel)
+            clip_failures = check_clip(path, args.quick, phoneme=is_ph)
             if not clip_failures:
                 ok += 1
             elif clip_failures == ["missing"]:
                 missing += 1
-                failures.append(f"{rel}: missing")
+                if is_ph:
+                    failures.append(
+                        f"{rel}: missing phoneme clip — run: "
+                        f"export OPENROUTER_API_KEY=sk-or-v1-... && "
+                        f"python3 tools/tts/generate_clips.py --primary-only"
+                    )
+                else:
+                    failures.append(f"{rel}: missing")
             else:
                 bad += 1
                 for failure in clip_failures:
