@@ -14,6 +14,7 @@
 //   GLYPHS_LOG_TIER=1    log one line per resolution + failures
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 
@@ -258,11 +259,8 @@ async function tierEspeak(word) {
 // ── Tier 3: fm CLI (Apple Foundation Models) ───────────────────────────────
 
 const FM_BIN = '/usr/bin/fm';
-const FM_SCHEMA = path.join(__dirname, 'phonemes.schema.json');
 const FM_TIMEOUT_MS = 15000;
 
-// The fm schema for phonemes uses string arrays (no enum constraint in the
-// fm schema format); we validate against VALID_SYMBOLS after parsing.
 // Prompt is kept terse but explicit — the on-device model is small and
 // benefits from examples and a clear enumeration of valid symbols.
 const FM_PROMPT_PREFIX =
@@ -276,10 +274,10 @@ const FM_PROMPT_PREFIX =
   'Word: ';
 
 // Build the fm schema that constrains output to a JSON object with a
-// phonemes string array.  fm requires x-order in addition to the standard
-// JSON Schema fields; without it fm rejects the file as "missing".  We use
-// fm's own schema format (no enum; we validate against VALID_SYMBOLS after
-// parsing) so that the --schema flag suppresses markdown fencing.
+// phonemes array whose items are an enum of the 39 valid symbols.  fm
+// requires x-order in addition to the standard JSON Schema fields; without
+// it fm rejects the file as "missing".  We still validate against
+// VALID_SYMBOLS after parsing as belt-and-braces.
 function buildFmSchema() {
   // Indent for readability; fm reads it as a file.
   return JSON.stringify({
@@ -289,17 +287,21 @@ function buildFmSchema() {
     required: ['phonemes'],
     additionalProperties: false,
     properties: {
-      phonemes: { type: 'array', items: { type: 'string' } },
+      phonemes: {
+        type: 'array',
+        items: { type: 'string', enum: Array.from(VALID_SYMBOLS) },
+      },
     },
   }, null, 2);
 }
 
 // Write the fm-compatible schema to a temp file (once) and reuse it.
+// The temp dir, not __dirname: the app directory may be read-only when
+// packaged.
 let _fmSchemaPath = null;
 function getFmSchemaPath() {
   if (_fmSchemaPath) return _fmSchemaPath;
-  // Write next to the canonical phonemes.schema.json; ephemeral but stable.
-  const p = path.join(__dirname, '_fm_schema_runtime.json');
+  const p = path.join(os.tmpdir(), 'glyphs-fm-phonemes-schema.json');
   fs.writeFileSync(p, buildFmSchema());
   _fmSchemaPath = p;
   return p;
