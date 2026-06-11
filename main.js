@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { createWindow } = require('./window');
 const { installAppLevel, attachToWindow } = require('./containment');
+const { g2p } = require('./g2p');
 
 const isDev = process.argv.includes('--dev');
 const isSmoke = process.argv.includes('--smoke');
@@ -50,6 +51,27 @@ ipcMain.handle('glyphs:history-load', () => {
     return sanitizeHistory(JSON.parse(fs.readFileSync(historyPath(), 'utf8')));
   } catch (err) {
     return []; // missing file, bad JSON, unreadable disk — all the same: empty
+  }
+});
+
+// ── G2P: grapheme-to-phoneme ─────────────────────────────────────────────────
+// Sanitise input in the main process; never throw to the renderer.
+// Returns { ok: true, phonemes, tier } or { ok: false }.
+
+// Only letters a–z and the apostrophe (contractions) are accepted.
+const G2P_ALLOWED = /^[a-z']+$/;
+
+ipcMain.handle('glyphs:g2p', async (event, word) => {
+  try {
+    if (typeof word !== 'string') return { ok: false };
+    const w = word.toLowerCase().trim();
+    if (!w || w.length > 64) return { ok: false };
+    if (!G2P_ALLOWED.test(w)) return { ok: false };
+    const result = await g2p(w);
+    if (!result) return { ok: false };
+    return { ok: true, phonemes: result.phonemes, tier: result.tier };
+  } catch (err) {
+    return { ok: false };
   }
 });
 

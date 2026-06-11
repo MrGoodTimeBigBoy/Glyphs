@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld('GlyphsHost', Object.freeze({
   // ignoring the result.
   loadHistory: () => ipcRenderer.invoke('glyphs:history-load'),
   saveHistory: (entries) => ipcRenderer.invoke('glyphs:history-save', entries),
+
+  // G2P: grapheme-to-phoneme. Returns { ok: true, phonemes, tier } or
+  // { ok: false }. Never throws. Input sanitisation happens in main.js.
+  g2p: (word) => ipcRenderer.invoke('glyphs:g2p', word),
 }));
