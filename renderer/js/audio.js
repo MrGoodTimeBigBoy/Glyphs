@@ -31,10 +31,6 @@
   var BAKEOFF_LETTERS = ['c', 'a', 't'];
   /* hmm is present in every voice — no need to list it here.       */
 
-  /* Gap between letters during sound-out, in ms.
-     Trimmed from 120 at the listening gate ("a shade long").         */
-  var LETTER_GAP_MS = 100;
-
   /* Gap between letter-names in spellWord(), in ms.
      Letter names are full syllables ("see", "ay", "tee") — they need
      more air than the phonemic letter-sound gap.  Ear-tune candidate. */
@@ -231,7 +227,6 @@
   /* gapForItem(item) — return the inter-item gap in ms.
      0 = immediate advance (e.g. after hmm before the letter sequence). */
   function gapForItem(item) {
-    if (item.kind === 'letter')     return LETTER_GAP_MS;
     if (item.kind === 'lettername') return LETTER_NAME_GAP_MS;
     if (item.kind === 'phoneme') {
       var ph = (item.key || '').toUpperCase();
@@ -245,10 +240,10 @@
      Plays items[idx] then recurses, honouring per-kind gaps between
      items.
 
-     Supported item kinds: 'letter', 'lettername', 'phoneme', 'hmm', 'word'.
+     Supported item kinds: 'lettername', 'phoneme', 'hmm', 'word'.
 
      Callback dispatch:
-       opts.onLetter(key, idx)   — before each 'letter' item
+       opts.onLetter(key, idx)   — before each 'lettername' item
        opts.onPhoneme(key, idx)  — before each 'phoneme' item
        opts.onDone()             — when the whole sequence completes   */
   function playSequence(items, myToken, opts, idx) {
@@ -261,7 +256,7 @@
     var item = items[idx];
     var url = clipUrl(item.kind, item.key);
 
-    if (opts.onLetter && item.kind === 'letter') {
+    if (opts.onLetter && item.kind === 'lettername') {
       opts.onLetter(item.key, idx);
     }
     if (opts.onPhoneme && item.kind === 'phoneme') {
@@ -431,9 +426,8 @@
   /* ── playLetterSound(letter) — single phonemic letter clip ───── */
   /*
      Convenience wrapper: plays the phonemic letter clip for a single
-     a–z character from letters-phonemic/ (the same clip set that the
-     legacy unknown-word sound-out uses, now also callable directly).
-     Sibling of playLetterName.
+     a–z character from letters-phonemic/ — the hide world's speak-mode
+     announcement. Sibling of playLetterName.
   */
   function playLetterSound(letter) {
     var l = (letter || '').toLowerCase();
