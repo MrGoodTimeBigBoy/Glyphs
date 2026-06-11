@@ -339,9 +339,17 @@ def main(argv=None) -> int:
     allowed = {"manifest.js"}
     for rel_paths in expected.values():
         allowed.update(rel_paths)
+
+    def is_known_junk(path: pathlib.Path) -> bool:
+        """OS noise that .gitignore also excludes: Finder copy-duplicates
+        ("word 2.wav") and .DS_Store.  Never assets, not worth failing on."""
+        return path.name == ".DS_Store" or " 2." in path.name
+
     if audio_dir.is_dir():
         for path in sorted(audio_dir.rglob("*")):
             if path.is_file() and path.relative_to(audio_dir).as_posix() not in allowed:
+                if is_known_junk(path):
+                    continue
                 failures.append(f"orphan file: {path.relative_to(audio_dir)}")
     else:
         failures.append(f"audio directory missing: {audio_dir}")
