@@ -786,11 +786,36 @@ def call_tts_api(api: str, text: str, voice_api: str, model: str,
         return call_tts_gemini(text, voice_api, model, api_key)
     return call_tts_openrouter(text, voice_api, model, api_key)
 
+def keychain_api_key(service: str) -> str | None:
+    """Read an API key from the macOS Keychain (returns None off-macOS,
+    when the item is absent, or when access is denied).
+
+    Store the key once, outside any repo, with:
+        security add-generic-password -a "$USER" -s SERVICE_NAME -w 'the-key' -U
+    """
+    if sys.platform != "darwin":
+        return None
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["security", "find-generic-password", "-s", service, "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return None
+    key = out.stdout.strip()
+    return key if out.returncode == 0 and key else None
+
 def resolve_api_key(api: str) -> str:
-    """Read the backend's API key from the environment or exit with help."""
+    """Read the backend's API key from the environment or the macOS
+    Keychain (service name == env var name), or exit with help."""
     env_names = API_CONFIGS[api]["key_env"]
     for name in env_names:
         key = os.environ.get(name)
+        if key:
+            return key
+    for name in env_names:
+        key = keychain_api_key(name)
         if key:
             return key
     hint = {
@@ -799,7 +824,9 @@ def resolve_api_key(api: str) -> str:
     }[api]
     print(
         f"ERROR: no API key set for --api {api}.\n"
-        f"Export one of: {', '.join(env_names)}\n{hint}",
+        f"Export one of: {', '.join(env_names)} — or store it in the macOS\n"
+        f"Keychain: security add-generic-password -a \"$USER\" "
+        f"-s {env_names[0]} -w 'the-key' -U\n{hint}",
         file=sys.stderr,
     )
     sys.exit(1)

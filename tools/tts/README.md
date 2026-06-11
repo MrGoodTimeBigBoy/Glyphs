@@ -135,8 +135,20 @@ manifest).
 ## Prerequisites
 
 1. **Python 3** — standard library only, no `pip install` required.
-2. **`OPENROUTER_API_KEY`** environment variable — an OpenRouter API key
-   (get one at https://openrouter.ai/settings/keys).
+2. **An OpenRouter API key** (get one at
+   https://openrouter.ai/settings/keys), provided either way:
+   - `OPENROUTER_API_KEY` environment variable, or
+   - the **macOS Keychain** (preferred — nothing secret ever sits in the
+     repo tree, so nothing can leak into a public repo). Store it once:
+
+     ```sh
+     security add-generic-password -a "$USER" -s OPENROUTER_API_KEY \
+         -w 'sk-or-v1-…' -U
+     ```
+
+     The generator checks the environment first, then the Keychain
+     (service name = env var name). Same scheme works for
+     `GEMINI_API_KEY` on the fallback route.
 3. **Network access to `openrouter.ai`** at generation time (clips are
    generated once and committed; the app itself is fully offline).
 
